@@ -57,13 +57,17 @@ export class SnippetParser {
 	/**
 	 * Normalize snippet body to string format
 	 */
-	private static normalizeSnippet(snippet: VscodeSnippet): { prefix: string; body: string; description?: string } {
+	private static normalizeSnippet(snippet: VscodeSnippet): Omit<ParsedSnippet, "processedText" | "tabStops" | "variables"> {
 		const body = Array.isArray(snippet.body) ? snippet.body.join('\n') : snippet.body;
 
 		return {
 			prefix: snippet.prefix,
 			body,
 			description: snippet.description,
+			hide: snippet.hide,
+			priority: snippet.priority,
+			sourceTag: snippet.sourceTag,
+			dynamicMeta: snippet.dynamicMeta,
 		};
 	}
 

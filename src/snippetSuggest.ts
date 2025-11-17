@@ -176,7 +176,7 @@ export class SnippetCompletionMenu {
 	private filterSnippets(query: string): ParsedSnippet[] {
 		const normalized = query.trim().toLowerCase();
 
-		const snippets = this.options.getSnippets();
+		const snippets = this.options.getSnippets().filter((snippet) => !snippet.hide);
 
 		if (!normalized) {
 			return this.applySort([...snippets], normalized, true);
@@ -214,24 +214,27 @@ export class SnippetCompletionMenu {
 
 		if (!normalizedQuery) {
 			if (isEmptyQuery) {
-				return entries;
+				return this.sortByPriority(entries);
 			}
 			return this.sortByLength(entries);
 		}
 
 		const scored = entries.map((snippet) => {
-			const priority = this.getSmartPriority(snippet, normalizedQuery);
 			return {
 				snippet,
-				priority,
+				sortPriority: snippet.priority ?? 0,
+				smartPriority: this.getSmartPriority(snippet, normalizedQuery),
 				length: snippet.prefix.length,
 				alpha: snippet.prefix.toLowerCase(),
 			};
 		});
 
 		scored.sort((a, b) => {
-			if (a.priority !== b.priority) {
-				return a.priority - b.priority;
+			if (a.sortPriority !== b.sortPriority) {
+				return b.sortPriority - a.sortPriority;
+			}
+			if (a.smartPriority !== b.smartPriority) {
+				return a.smartPriority - b.smartPriority;
 			}
 			if (a.length !== b.length) {
 				return a.length - b.length;
@@ -246,6 +249,14 @@ export class SnippetCompletionMenu {
 		return [...entries].sort((a, b) => {
 			const lengthDiff = a.prefix.length - b.prefix.length;
 			if (lengthDiff !== 0) return lengthDiff;
+			return a.prefix.localeCompare(b.prefix);
+		});
+	}
+
+	private sortByPriority(entries: ParsedSnippet[]): ParsedSnippet[] {
+		return [...entries].sort((a, b) => {
+			const priorityDiff = (b.priority ?? 0) - (a.priority ?? 0);
+			if (priorityDiff !== 0) return priorityDiff;
 			return a.prefix.localeCompare(b.prefix);
 		});
 	}

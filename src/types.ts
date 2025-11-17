@@ -11,6 +11,10 @@ export interface VscodeSnippet {
 	prefix: string;
 	body: string | string[];
 	description?: string;
+	hide?: boolean;
+	priority?: number;
+	sourceTag?: string;
+	dynamicMeta?: Record<string, unknown>;
 }
 
 /**
