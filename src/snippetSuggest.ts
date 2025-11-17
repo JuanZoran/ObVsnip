@@ -39,6 +39,8 @@ export class SnippetCompletionMenu {
 
 	private currentQuery = "";
 
+	private emptyStateMessage: string | null = null;
+
 	constructor(private app: App, private options: SnippetMenuOptions) {
 		this.boundKeydown = this.handleKeydown.bind(this);
 
@@ -60,9 +62,9 @@ export class SnippetCompletionMenu {
 
 		this.currentQuery = initialQuery ?? "";
 
-		this.entries = this.filterSnippets(this.currentQuery);
+		const hasEntries = this.updateEntriesForQuery(this.currentQuery);
 
-		if (this.entries.length === 0) {
+		if (!hasEntries) {
 			this.options.logger.debug(
 				"[SnippetMenu] open: no snippets match query"
 			);
@@ -162,32 +164,7 @@ export class SnippetCompletionMenu {
 		});
 
 		this.listEl = listWrapper;
-
-		this.entries.forEach((snippet, index) => {
-			const item = listWrapper.createDiv({
-				cls: "snippet-completion-item",
-			});
-
-			item.dataset.index = index.toString();
-
-			item.createDiv({
-				cls: "snippet-completion-title",
-				text: snippet.prefix,
-			});
-
-			if (snippet.description) {
-				item.createDiv({
-					cls: "snippet-completion-desc",
-					text: snippet.description,
-				});
-			}
-
-			item.addEventListener("mousedown", (event) => {
-				event.preventDefault();
-
-				this.applySelection(index);
-			});
-		});
+		this.populateList(listWrapper);
 
 		const preview = container.createDiv({
 			cls: "snippet-completion-preview",
@@ -209,7 +186,7 @@ export class SnippetCompletionMenu {
 	}
 
 	private selectIndex(index: number): void {
-		if (!this.listEl) return;
+		if (!this.listEl || this.entries.length === 0) return;
 
 		if (index < 0) index = this.entries.length - 1;
 
@@ -217,7 +194,9 @@ export class SnippetCompletionMenu {
 
 		this.activeIndex = index;
 
-		const items = Array.from(this.listEl.children) as HTMLElement[];
+		const items = Array.from(
+			this.listEl.querySelectorAll<HTMLElement>(".snippet-completion-item")
+		);
 
 		items.forEach((item, idx) =>
 			item.toggleClass("is-selected", idx === index)
@@ -303,9 +282,9 @@ export class SnippetCompletionMenu {
 
 		this.currentQuery = newQuery;
 
-		this.entries = this.filterSnippets(this.currentQuery);
+		const hasEntries = this.updateEntriesForQuery(this.currentQuery);
 
-		if (this.entries.length === 0) {
+		if (!hasEntries) {
 			this.close();
 
 			return;
@@ -313,33 +292,7 @@ export class SnippetCompletionMenu {
 
 		if (!this.listEl || !this.container) return;
 
-		this.listEl.empty();
-
-		this.entries.forEach((snippet, index) => {
-			const item = this.listEl!.createDiv({
-				cls: "snippet-completion-item",
-			});
-
-			item.dataset.index = index.toString();
-
-			item.createDiv({
-				cls: "snippet-completion-title",
-				text: snippet.prefix,
-			});
-
-			if (snippet.description) {
-				item.createDiv({
-					cls: "snippet-completion-desc",
-					text: snippet.description,
-				});
-			}
-
-			item.addEventListener("mousedown", (event) => {
-				event.preventDefault();
-
-				this.applySelection(index);
-			});
-		});
+		this.populateList(this.listEl);
 
 		this.selectIndex(0);
 	}
@@ -410,5 +363,64 @@ export class SnippetCompletionMenu {
 		const match = prefix.match(/(\S+)$/);
 
 		return match?.[0] ?? "";
+	}
+
+	private updateEntriesForQuery(query: string): boolean {
+		const filtered = this.filterSnippets(query);
+		if (filtered.length > 0) {
+			this.entries = filtered;
+			this.emptyStateMessage = null;
+			return true;
+		}
+
+		const allSnippets = this.options.getSnippets();
+		if (allSnippets.length === 0) {
+			this.entries = [];
+			this.emptyStateMessage = null;
+			return false;
+		}
+
+		this.entries = allSnippets;
+		this.emptyStateMessage = query
+			? `No snippets match "${query}". Showing all snippets.`
+			: null;
+		return true;
+	}
+
+	private populateList(listEl: HTMLElement): void {
+		listEl.empty();
+
+		if (this.emptyStateMessage) {
+			listEl.createDiv({
+				cls: "snippet-completion-empty",
+				text: this.emptyStateMessage,
+			});
+		}
+
+		this.entries.forEach((snippet, index) => {
+			const item = listEl.createDiv({
+				cls: "snippet-completion-item",
+			});
+
+			item.dataset.index = index.toString();
+
+			item.createDiv({
+				cls: "snippet-completion-title",
+				text: snippet.prefix,
+			});
+
+			if (snippet.description) {
+				item.createDiv({
+					cls: "snippet-completion-desc",
+					text: snippet.description,
+				});
+			}
+
+			item.addEventListener("mousedown", (event) => {
+				event.preventDefault();
+
+				this.applySelection(index);
+			});
+		});
 	}
 }

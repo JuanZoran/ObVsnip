@@ -1,6 +1,6 @@
-import { App, Menu, Notice, PluginSettingTab, Setting, TFile } from 'obsidian';
-import type TextSnippetsPlugin from '../main';
-import type { SnippetMenuKeymap } from './types';
+import { App, Menu, Notice, PluginSettingTab, Setting, TFile } from "obsidian";
+import type TextSnippetsPlugin from "../main";
+import type { SnippetMenuKeymap } from "./types";
 
 export class TextSnippetsSettingsTab extends PluginSettingTab {
 	private plugin: TextSnippetsPlugin;
@@ -14,10 +14,6 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 		containerEl.createEl("h2", { text: "Text Snippets Settings" });
-		containerEl.createEl("p", {
-			text: "Uses VSCode-style JSON snippet format",
-		});
-
 		this.createFileSelectionSetting();
 		this.createSettingsSection();
 	}
@@ -53,42 +49,56 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 
 	private createSettingsSection(): void {
 		const { containerEl } = this;
-		containerEl.createEl('h3', { text: 'Snippet trigger' });
+		containerEl.createEl("h3", { text: "Snippet trigger" });
 
 		new Setting(containerEl)
-			.setName('Trigger key')
-			.setDesc('Key combination (CodeMirror syntax) used for expand/jump fallback, e.g. "Tab" or "Mod-Enter".')
-			.addText(text =>
+			.setName("Trigger key")
+			.setDesc(
+				'Key combination (CodeMirror syntax) used for expand/jump fallback, e.g. "Tab" or "Mod-Enter".'
+			)
+			.addText((text) =>
 				text
-					.setPlaceholder('Tab')
+					.setPlaceholder("Tab")
 					.setValue(this.plugin.settings.triggerKey)
-					.onChange(async value => {
-						this.plugin.settings.triggerKey = value.trim() || 'Tab';
+					.onChange(async (value) => {
+						this.plugin.settings.triggerKey = value.trim() || "Tab";
 						await this.plugin.saveSettings();
 						this.plugin.applyRuntimeSettings();
-					}),
+					})
 			);
 
-		new Setting(containerEl)
-			.setName('Show menu when trigger has no match')
-			.setDesc('When enabled, pressing the trigger key with no matching prefix opens the snippet menu so you can pick manually.')
-			.addToggle(toggle =>
-				toggle
-					.setValue(this.plugin.settings.autoShowMenu)
-					.onChange(async value => {
-						this.plugin.settings.autoShowMenu = value;
-						await this.plugin.saveSettings();
-					}),
-			);
-
-		containerEl.createEl('h3', { text: 'Snippet picker' });
-		containerEl.createEl('p', {
-			text: 'Customize keyboard shortcuts for the inline picker. Leave fields blank to use Obsidian defaults.',
+		containerEl.createEl("h3", { text: "Snippet picker" });
+		containerEl.createEl("p", {
+			text: "Customize keyboard shortcuts for the inline picker. Leave fields blank to use Obsidian defaults.",
 		});
-		this.addMenuKeySetting(containerEl, 'next', 'Next item', 'Move the selection down.', 'ArrowDown');
-		this.addMenuKeySetting(containerEl, 'prev', 'Previous item', 'Move the selection up.', 'ArrowUp');
-		this.addMenuKeySetting(containerEl, 'accept', 'Accept selection', 'Insert the highlighted snippet.', 'Enter');
-		this.addMenuKeySetting(containerEl, 'toggle', 'Toggle picker', 'Open or close the picker anywhere.', 'Mod-Shift-S');
+		this.addMenuKeySetting(
+			containerEl,
+			"next",
+			"Next item",
+			"Move the selection down.",
+			"ArrowDown"
+		);
+		this.addMenuKeySetting(
+			containerEl,
+			"prev",
+			"Previous item",
+			"Move the selection up.",
+			"ArrowUp"
+		);
+		this.addMenuKeySetting(
+			containerEl,
+			"accept",
+			"Accept selection",
+			"Insert the highlighted snippet.",
+			"Enter"
+		);
+		this.addMenuKeySetting(
+			containerEl,
+			"toggle",
+			"Toggle picker",
+			"Open or close the picker anywhere.",
+			"Mod-Shift-S"
+		);
 
 		containerEl.createEl("h3", { text: "Virtual text" });
 

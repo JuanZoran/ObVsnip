@@ -23,7 +23,6 @@ interface PluginSettings {
 	virtualTextColor: string;
 	enableDebugLogs: boolean;
 	triggerKey: string;
-	autoShowMenu: boolean;
 	menuKeymap: SnippetMenuKeymap;
 }
 
@@ -34,7 +33,6 @@ const DEFAULT_SETTINGS: PluginSettings = {
 	virtualTextColor: "var(--text-muted)",
 	enableDebugLogs: false,
 	triggerKey: "Tab",
-	autoShowMenu: true,
 	menuKeymap: {
 		next: "ArrowDown",
 		prev: "ArrowUp",
@@ -123,9 +121,6 @@ export default class TextSnippetsPlugin extends Plugin {
 		);
 		if (!this.settings.virtualTextColor) {
 			this.settings.virtualTextColor = "var(--text-muted)";
-		}
-		if (typeof this.settings.autoShowMenu !== "boolean") {
-			this.settings.autoShowMenu = DEFAULT_SETTINGS.autoShowMenu;
 		}
 	}
 
@@ -239,13 +234,9 @@ export default class TextSnippetsPlugin extends Plugin {
 		if (this.snippetManager.jumpToNextTabStop({ silent: true })) {
 			return true;
 		}
-		if (this.settings.autoShowMenu) {
-			const opened = this.openSnippetMenu(
-				this.snippetManager.getActiveEditor() ?? undefined
-			);
-			return opened;
-		}
-		return false;
+		return this.openSnippetMenu(
+			this.snippetManager.getActiveEditor() ?? undefined
+		);
 	}
 
 	private handleMenuToggleShortcut(_view: EditorView): boolean {
