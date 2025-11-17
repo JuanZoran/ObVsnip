@@ -51,6 +51,13 @@ export interface LocaleStrings {
 		variableHelpName: string;
 		variableHelpDesc: string;
 		variableDetails: Record<string, string>;
+		snippetFilesListName: string;
+		snippetFilesListDesc: string;
+		snippetFilesOrderHint: string;
+		snippetFilesEmpty: string;
+		snippetFilesAddButton: string;
+		snippetFilesReloadButton: string;
+		snippetFilesRemoveButton: string;
 	};
 }
 
@@ -69,7 +76,7 @@ const translations: Record<LocaleKey, LocaleStrings> = {
 			fileName: "📁 Snippet file",
 			fileDesc: "Choose the VSCode-style JSON that holds your snippets.",
 			chooseButton: "Choose file",
-			editButton: "Edit",
+			editButton: "Open",
 			triggerSection: "⌨️ Trigger key",
 			triggerName: "Trigger shortcut",
 			triggerDesc:
@@ -129,28 +136,37 @@ const translations: Record<LocaleKey, LocaleStrings> = {
 				CURRENT_SECOND: "Current second (SS)",
 				TIME_FORMATTED: "Current time (HH:mm:ss)",
 			},
+			snippetFilesListName: "Snippet files",
+			snippetFilesListDesc:
+				"Load multiple snippet files; later ones override earlier prefixes.",
+			snippetFilesOrderHint:
+				"Files load top-to-bottom; remove and re-add to change priority.",
+			snippetFilesEmpty: "No snippet files selected.",
+			snippetFilesAddButton: "Add file",
+			snippetFilesReloadButton: "Reload snippets",
+			snippetFilesRemoveButton: "Remove",
 		},
 	},
 	zh: {
 		commands: {
-			expand: "✨ 展开片段",
+			expand: "✨ 展开Snippet",
 			jumpNext: "➡️ 跳到下一个占位符",
 			jumpPrev: "⬅️ 跳到上一个占位符",
-			reload: "🔄 重新载入片段文件",
-			debug: "🧪 调试：在控制台打印片段",
-			openMenu: "📋 打开片段选择器",
+			reload: "🔄 重新载入Snippet文件",
+			debug: "🧪 调试：在控制台Snippet片段",
+			openMenu: "📋 打开Snippet菜单",
 		},
 		settings: {
 			title: "📝 ObVsnip 设置",
-			fileName: "📁 片段文件",
+			fileName: "📁 Snippet文件",
 			fileDesc: "选择储存 VSCode 风格片段的 JSON 文件。",
 			chooseButton: "选择文件",
-			editButton: "编辑",
+			editButton: "打开",
 			triggerSection: "⌨️ 触发键",
 			triggerName: "触发快捷键",
 			triggerDesc: "用于展开/跳转兜底，例如 “Tab” 或 “Mod-Enter”。",
 			pickerSection: "🧾 片段选择器",
-			pickerHint: "自定义内联选择器的快捷键，留空则使用默认值。",
+			pickerHint: "自定义snippet菜单的快捷键，留空则使用默认值。",
 			menuKeys: {
 				nextName: "下一个项目",
 				nextDesc: "将选取向下移动。",
@@ -201,6 +217,15 @@ const translations: Record<LocaleKey, LocaleStrings> = {
 				CURRENT_SECOND: "当前秒钟（SS）",
 				TIME_FORMATTED: "当前时间（HH:mm:ss）",
 			},
+			snippetFilesListName: "片段文件列表",
+			snippetFilesListDesc:
+				"可选择多个 JSON 片段文件；若前缀冲突，后面的文件会覆盖前面的定义。",
+			snippetFilesOrderHint:
+				"文件按从上到下的顺序加载，可通过删除并重新添加来调整优先级。",
+			snippetFilesEmpty: "暂未选择片段文件。",
+			snippetFilesAddButton: "添加文件",
+			snippetFilesReloadButton: "重新加载片段",
+			snippetFilesRemoveButton: "删除",
 		},
 	},
 };

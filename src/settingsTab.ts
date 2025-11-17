@@ -1,4 +1,12 @@
-import { App, Menu, Notice, PluginSettingTab, Setting, TFile, Modal } from "obsidian";
+import {
+	App,
+	Menu,
+	Notice,
+	PluginSettingTab,
+	Setting,
+	TFile,
+	Modal,
+} from "obsidian";
 import type TextSnippetsPlugin from "../main";
 import type { SnippetMenuKeymap } from "./types";
 import type { DebugCategory } from "./logger";
@@ -83,29 +91,28 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 		const { containerEl } = this;
 		const strings = this.plugin.getStrings().settings;
 
+		containerEl.createEl("h3", { text: strings.snippetFilesListName });
+		containerEl.createEl("p", { text: strings.snippetFilesListDesc });
+		const listWrapper = containerEl.createDiv({ cls: "snippet-files-list" });
+		this.renderSnippetFileEntries(listWrapper, strings);
+		containerEl.createEl("p", {
+			text: strings.snippetFilesOrderHint,
+			cls: "setting-item-description",
+		});
+
 		new Setting(containerEl)
 			.setName(strings.fileName)
 			.setDesc(strings.fileDesc)
-			.addText((text) =>
-				text
-					.setPlaceholder("snippets.json")
-					.setValue(this.plugin.settings.snippetsFilePath)
-					.setDisabled(true)
-			)
 			.addButton((btn) =>
 				btn
-					.setButtonText(strings.chooseButton)
+					.setButtonText(strings.snippetFilesAddButton)
 					.setCta()
 					.onClick(() => this.showFileMenu())
 			)
 			.addButton((btn) =>
-				btn.setButtonText(strings.editButton).onClick(async () => {
-					if (!this.plugin.settings.snippetsFilePath) {
-						new Notice("Please select a snippet file first");
-						return;
-					}
-					await this.openFileInEditor();
-				})
+				btn
+					.setButtonText(strings.snippetFilesReloadButton)
+					.onClick(() => this.handleReloadSnippets())
 			);
 	}
 
@@ -283,7 +290,7 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 		modal.open();
 	}
 
-	private showFileMenu(): void {
+private showFileMenu(): void {
 		const files = this.plugin.getSnippetLoader().getTextFiles();
 
 		if (files.length === 0) {
@@ -291,29 +298,16 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 			return;
 		}
 
-		const menu = new Menu();
+const menu = new Menu();
 		files.forEach((file: TFile) => {
 			menu.addItem((item) =>
 				item.setTitle(file.path).onClick(async () => {
-					this.plugin.settings.snippetsFilePath = file.path;
-					await this.plugin.saveSettings();
-					await this.plugin.loadSnippetsFromFile();
-					this.display();
+					await this.handleSnippetFileSelected(file.path);
 				})
 			);
 		});
 
-		menu.showAtMouseEvent(event as MouseEvent);
-	}
-
-	private async openFileInEditor(): Promise<void> {
-		const filePath = this.plugin.settings.snippetsFilePath;
-		if (!filePath) return;
-
-		const file = this.app.vault.getAbstractFileByPath(filePath);
-		if (file && file.hasOwnProperty("stat")) {
-			await this.app.workspace.getLeaf().openFile(file as TFile);
-		}
+menu.showAtMouseEvent(event as MouseEvent);
 	}
 
 	private addMenuKeySetting(
@@ -337,4 +331,63 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 					})
 			);
 	}
+
+	private renderSnippetFileEntries(
+		container: HTMLElement,
+		strings: ReturnType<TextSnippetsPlugin["getStrings"]>["settings"]
+	): void {
+		container.empty();
+		const files = this.plugin.settings.snippetFiles;
+		if (files.length === 0) {
+			container.createEl("p", {
+				text: strings.snippetFilesEmpty,
+				cls: "setting-item-description",
+			});
+			return;
+		}
+
+		files.forEach((path, index) => {
+			const row = new Setting(container).setName(`${index + 1}. ${path}`);
+			row.addButton((btn) =>
+				btn.setButtonText(strings.editButton).onClick(async () => {
+					const file = this.app.vault.getAbstractFileByPath(path);
+					if (!(file instanceof TFile)) {
+						new Notice("File not found in vault");
+						return;
+					}
+					await this.app.workspace.getLeaf().openFile(file);
+				})
+			);
+			row.addButton((btn) =>
+				btn
+					.setButtonText(strings.snippetFilesRemoveButton)
+					.setWarning()
+					.onClick(() => this.handleRemoveSnippetFile(path))
+			);
+		});
+	}
+
+	private async handleSnippetFileSelected(path: string): Promise<void> {
+		if (!path) return;
+		if (!this.plugin.settings.snippetFiles.includes(path)) {
+			this.plugin.settings.snippetFiles.push(path);
+			await this.plugin.saveSettings();
+			await this.plugin.loadSnippetsFromFiles();
+		}
+		this.display();
+	}
+
+	private async handleRemoveSnippetFile(path: string): Promise<void> {
+		this.plugin.settings.snippetFiles = this.plugin.settings.snippetFiles.filter(
+			(p) => p !== path
+		);
+		await this.plugin.saveSettings();
+		await this.plugin.loadSnippetsFromFiles();
+		this.display();
+	}
+
+	private async handleReloadSnippets(): Promise<void> {
+		await this.plugin.loadSnippetsFromFiles();
+	}
+
 }

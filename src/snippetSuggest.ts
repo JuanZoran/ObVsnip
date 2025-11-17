@@ -1,4 +1,4 @@
-import { App, Editor, MarkdownView, type EditorPosition } from "obsidian";
+import { App, Editor, type EditorPosition } from "obsidian";
 
 import type { ParsedSnippet } from "./types";
 
@@ -6,7 +6,7 @@ import { SnippetManager } from "./snippetManager";
 
 import { PluginLogger } from "./logger";
 
-import { getEditorView } from "./editorUtils";
+import { getActiveEditor, getEditorView } from "./editorUtils";
 
 export type SnippetSortMode = "none" | "smart" | "prefix-length";
 
@@ -69,7 +69,7 @@ export class SnippetCompletionMenu {
 	}
 
 	open(editor?: Editor | null, initialQuery = ""): boolean {
-		const targetEditor = editor ?? this.getActiveEditor();
+		const targetEditor = editor ?? getActiveEditor(this.app);
 
 		if (!targetEditor) {
 			this.options.logger.debug("menu", "[SnippetMenu] open: no active editor");
@@ -164,12 +164,6 @@ export class SnippetCompletionMenu {
 		this.applySelection(this.activeIndex);
 
 		return true;
-	}
-
-	private getActiveEditor(): Editor | null {
-		return (
-			this.app.workspace.getActiveViewOfType(MarkdownView)?.editor ?? null
-		);
 	}
 
 	private filterSnippets(query: string): ParsedSnippet[] {

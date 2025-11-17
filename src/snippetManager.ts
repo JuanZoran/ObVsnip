@@ -1,9 +1,9 @@
-import { App, Editor, MarkdownView, Notice } from 'obsidian';
-import type { EditorView } from '@codemirror/view';
-import { SnippetEngine } from './snippetEngine';
-import { PluginLogger } from './logger';
-import { ParsedSnippet, TabStopInfo, SnippetVariableInfo } from './types';
-import { processSnippetBody } from './snippetBody';
+import { App, Editor, Notice } from "obsidian";
+import type { EditorView } from "@codemirror/view";
+import { SnippetEngine } from "./snippetEngine";
+import { PluginLogger } from "./logger";
+import { ParsedSnippet, TabStopInfo, SnippetVariableInfo } from "./types";
+import { processSnippetBody } from "./snippetBody";
 import {
     pushSnippetSessionEffect,
     popSnippetSessionEffect,
@@ -13,14 +13,14 @@ import {
     SnippetSessionStop,
     SnippetSessionEntry,
 } from './snippetSession';
-import { getEditorView } from './editorUtils';
-import { resolveVariableValue } from './variableResolver';
+import { getActiveEditor, getEditorView } from "./editorUtils";
+import { resolveVariableValue } from "./variableResolver";
 
 export class SnippetManager {
     constructor(private app: App, private snippetEngine: SnippetEngine, private logger: PluginLogger) {}
 
     expandSnippet(): boolean {
-        const editor = this.getActiveEditor();
+        const editor = getActiveEditor(this.app);
         if (!editor) {
             new Notice('No active editor');
             return false;
@@ -41,7 +41,7 @@ export class SnippetManager {
 
     jumpToNextTabStop(options?: { silent?: boolean }): boolean {
         const silent = options?.silent ?? false;
-        const editor = this.getActiveEditor();
+        const editor = getActiveEditor(this.app);
         if (!editor) return false;
 
         const session = this.getCurrentSession(editor);
@@ -89,7 +89,7 @@ export class SnippetManager {
     }
 
     jumpToPrevTabStop(): void {
-        const editor = this.getActiveEditor();
+        const editor = getActiveEditor(this.app);
         if (!editor) return;
 
         const session = this.getCurrentSession(editor);
@@ -113,7 +113,7 @@ export class SnippetManager {
     forceExitSnippetMode(view?: EditorView): boolean {
         let targetView: EditorView | undefined = view;
         if (!targetView) {
-            const editor = this.getActiveEditor();
+            const editor = getActiveEditor(this.app);
             if (editor) {
                 const resolved = getEditorView(editor);
                 if (resolved) {
@@ -233,7 +233,7 @@ export class SnippetManager {
     }
 
     applySnippetAtCursor(snippet: ParsedSnippet, editor?: Editor): boolean {
-        const targetEditor = editor ?? this.getActiveEditor();
+        const targetEditor = editor ?? getActiveEditor(this.app);
         if (!targetEditor) {
             new Notice('No active editor');
             return false;
@@ -250,7 +250,7 @@ export class SnippetManager {
     }
 
     cycleChoiceAtCurrentStop(): boolean {
-        const editor = this.getActiveEditor();
+        const editor = getActiveEditor(this.app);
         if (!editor) return false;
 
         const session = this.getCurrentSession(editor);
@@ -299,6 +299,7 @@ export class SnippetManager {
         );
 
         let delta = 0;
+        const missingVariables: string[] = [];
         for (const variable of sortedVariables) {
             const start = variable.start + delta;
             const end = variable.end + delta;
@@ -323,9 +324,8 @@ export class SnippetManager {
                 const fallbackInfo = variable.defaultValue
                     ? ` (fallback = "${variable.defaultValue}")`
                     : "";
-                new Notice(
-                    `Snippet variable ${variable.name} has no value: ${reason}${fallbackInfo}`,
-                    4000
+                missingVariables.push(
+                    `${variable.name}: ${reason}${fallbackInfo}`
                 );
             }
 
@@ -348,6 +348,13 @@ export class SnippetManager {
                 });
                 delta += diff;
             }
+        }
+
+        if (missingVariables.length > 0) {
+            const message =
+                "Snippet variables missing:\n" +
+                missingVariables.map((msg) => `• ${msg}`).join("\n");
+            new Notice(message, 5000);
         }
 
         return { text: currentText, tabStops: updatedStops };
@@ -377,8 +384,4 @@ export class SnippetManager {
         view.dispatch({ effects: popSnippetSessionEffect.of(undefined) });
     }
 
-    getActiveEditor(): Editor | null {
-        const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-        return view?.editor || null;
-    }
 }

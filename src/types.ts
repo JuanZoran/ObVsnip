@@ -24,17 +24,6 @@ export interface ParsedSnippet extends VscodeSnippet {
 }
 
 /**
- * Plugin settings
- */
-export interface TextSnippetsSettings {
-	snippetsFilePath: string;
-	snippets: ParsedSnippet[];
-	useTab: boolean;
-	useSpace: boolean;
-	isWYSIWYG: boolean;
-}
-
-/**
  * Trie node for prefix matching
  */
 export interface TrieNode {
@@ -65,14 +54,6 @@ export interface SnippetVariableInfo {
 	start: number;      // Start position in processed text
 	end: number;        // End position after default text insertion
 	defaultValue?: string;
-}
-
-/**
- * Delta tracker for tracking text changes
- */
-export interface DeltaChange {
-	tabStopIndex: number;  // Which tab stop was edited (e.g., 1 for $1)
-	deltaLength: number;   // Change in text length (positive or negative)
 }
 
 export interface SnippetMenuKeymap {

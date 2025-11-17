@@ -1,4 +1,4 @@
-import { App, Editor, MarkdownView, Plugin, Notice } from "obsidian";
+import { Editor, MarkdownView, Plugin, Notice } from "obsidian";
 import { Compartment } from "@codemirror/state";
 import type { Extension } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
@@ -13,7 +13,7 @@ import {
 import { SnippetManager } from "./src/snippetManager";
 import { PluginLogger } from "./src/logger";
 import type { DebugCategory } from "./src/logger";
-import { getEditorView } from "./src/editorUtils";
+import { getActiveEditor, getEditorView } from "./src/editorUtils";
 import { TextSnippetsSettingsTab } from "./src/settingsTab";
 import { buildTriggerKeymapExtension } from "./src/keymap";
 import { SnippetCompletionMenu } from "./src/snippetSuggest";
@@ -23,7 +23,7 @@ import {
 } from "./src/i18n";
 
 interface PluginSettings {
-	snippetsFilePath: string;
+	snippetFiles: string[];
 	showVirtualText: boolean;
 	virtualTextColor: string;
 	enableDebugLogs: boolean;
@@ -34,7 +34,7 @@ interface PluginSettings {
 }
 
 const DEFAULT_SETTINGS: PluginSettings = {
-	snippetsFilePath: "",
+	snippetFiles: [],
 	showVirtualText: true,
 	virtualTextColor: "var(--text-muted)",
 	enableDebugLogs: false,
@@ -71,9 +71,9 @@ export default class TextSnippetsPlugin extends Plugin {
 			this.logger
 		);
 
-		if (this.settings.snippetsFilePath) {
+		if (this.settings.snippetFiles.length > 0) {
 			const runLoad = async () => {
-				await this.loadSnippetsFromFile();
+				await this.loadSnippetsFromFiles();
 			};
 			if (this.app.workspace.layoutReady) {
 				void runLoad();
@@ -136,6 +136,19 @@ export default class TextSnippetsPlugin extends Plugin {
 		if (!this.settings.menuSortMode) {
 			this.settings.menuSortMode = DEFAULT_SETTINGS.menuSortMode;
 		}
+		const legacyPath = (this.settings as any).snippetsFilePath;
+		if (!Array.isArray(this.settings.snippetFiles)) {
+			this.settings.snippetFiles = [];
+		}
+		if (
+			legacyPath &&
+			typeof legacyPath === "string" &&
+			legacyPath.length > 0 &&
+			this.settings.snippetFiles.length === 0
+		) {
+			this.settings.snippetFiles = [legacyPath];
+		}
+		delete (this.settings as any).snippetsFilePath;
 		if (!Array.isArray(this.settings.debugCategories)) {
 			this.settings.debugCategories = [];
 		}
@@ -145,16 +158,50 @@ export default class TextSnippetsPlugin extends Plugin {
 		await this.saveData(this.settings);
 	}
 
-	async loadSnippetsFromFile(): Promise<void> {
-		const snippets = await this.snippetLoader.loadFromFile(
-			this.settings.snippetsFilePath
-		);
-		this.snippetEngine.setSnippets(snippets);
+	async loadSnippetsFromFiles(filePaths?: string[]): Promise<void> {
+		const targets = filePaths ?? this.settings.snippetFiles;
+		if (!targets || targets.length === 0) {
+			new Notice("⚠️ No snippet files configured");
+			this.snippetEngine.setSnippets([]);
+			return;
+		}
 
-		if (snippets.length > 0) {
-			new Notice(`✅ Loaded ${snippets.length} snippets`);
-		} else {
-			new Notice("⚠️ No snippets loaded");
+		const successes: string[] = [];
+		const failures: string[] = [];
+		const aggregated: ParsedSnippet[] = [];
+
+		for (const path of targets) {
+			const snippets = await this.snippetLoader.loadFromFile(path);
+			if (snippets.length > 0) {
+				successes.push(`${path} (${snippets.length})`);
+				aggregated.push(...snippets);
+			} else {
+				failures.push(path);
+			}
+		}
+
+		this.snippetEngine.setSnippets(aggregated);
+
+		if (aggregated.length > 0) {
+			const detail = successes.length
+				? ` from ${successes.length} file(s)`
+				: "";
+			new Notice(`✅ Loaded ${aggregated.length} snippets${detail}`);
+			this.logger.debug(
+				"loader",
+				`Loaded snippets: ${successes.join(", ")}`
+			);
+		}
+
+		if (failures.length > 0) {
+			new Notice(
+				`⚠️ Failed to load snippets from: ${failures.join(", ")}`,
+				6000
+			);
+			this.logger.debug(
+				"loader",
+				`Failed snippet files: ${failures.join(", ")}`
+			);
 		}
 	}
 
@@ -226,19 +273,25 @@ export default class TextSnippetsPlugin extends Plugin {
 	}
 
 	private async reloadSnippetsCommand(): Promise<void> {
-		if (!this.settings.snippetsFilePath) {
-			new Notice("⚠️ No snippet file configured");
+		if (this.settings.snippetFiles.length === 0) {
+			new Notice("⚠️ No snippet files configured");
 			return;
 		}
 
 		this.logger.debug("general", "📂 Reloading snippets...");
-		await this.loadSnippetsFromFile();
+		await this.loadSnippetsFromFiles();
 	}
 
 	private debugPrintSnippets(): void {
 		const snippets = this.snippetEngine.getSnippets();
 		console.log("=== Loaded Snippets ===");
-		console.log(`File: ${this.settings.snippetsFilePath}`);
+		console.log(
+			`Files: ${
+				this.settings.snippetFiles.length > 0
+					? this.settings.snippetFiles.join(", ")
+					: "(none)"
+			}`
+		);
 		console.log(`Count: ${snippets.length}`);
 		snippets.forEach((s, i) => {
 			console.log(
@@ -277,7 +330,7 @@ export default class TextSnippetsPlugin extends Plugin {
 	}
 
 	private handleMenuToggleShortcut(_view: EditorView): boolean {
-		const editor = this.snippetManager.getActiveEditor();
+		const editor = getActiveEditor(this.app);
 		if (!editor) return false;
 		if (this.snippetManager.cycleChoiceAtCurrentStop()) {
 			return true;
@@ -290,7 +343,7 @@ export default class TextSnippetsPlugin extends Plugin {
 		editor?: Editor | null,
 		initialQuery?: string
 	): boolean {
-		const targetEditor = editor ?? this.snippetManager.getActiveEditor();
+		const targetEditor = editor ?? getActiveEditor(this.app);
 		if (!targetEditor) {
 			return false;
 		}
@@ -335,11 +388,6 @@ export default class TextSnippetsPlugin extends Plugin {
 		}
 	}
 
-	private getActiveEditor(): Editor | null {
-		const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-		return view?.editor || null;
-	}
-
 	private handleGlobalKeydown(event: KeyboardEvent): void {
 		const isEscape =
 			event.key === "Escape" &&
@@ -357,7 +405,7 @@ export default class TextSnippetsPlugin extends Plugin {
 			return;
 		}
 
-		const editor = this.getActiveEditor();
+		const editor = getActiveEditor(this.app);
 		if (!editor) return;
 		const editorView = getEditorView(editor);
 

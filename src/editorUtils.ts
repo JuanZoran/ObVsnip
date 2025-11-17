@@ -1,6 +1,6 @@
-import type { Editor } from 'obsidian';
-import type { EditorView } from '@codemirror/view';
-import { editorEditorField } from 'obsidian';
+import { editorEditorField, MarkdownView } from "obsidian";
+import type { App, Editor } from "obsidian";
+import type { EditorView } from "@codemirror/view";
 
 export function getEditorView(editor: Editor): EditorView | null {
 	const anyEditor = editor as unknown as {
@@ -35,3 +35,11 @@ export function getEditorView(editor: Editor): EditorView | null {
 
 	return null;
 }
+
+export const getActiveMarkdownView = (app: App): MarkdownView | null => {
+	return app.workspace.getActiveViewOfType(MarkdownView) ?? null;
+};
+
+export const getActiveEditor = (app: App): Editor | null => {
+	return getActiveMarkdownView(app)?.editor ?? null;
+};
