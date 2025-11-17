@@ -1,6 +1,6 @@
 {
 	"id": "obvsnip",
-	"name": "Obsidian VSCode Snippet",
+	"name": "ObVsnip",
 	"version": "0.0.1",
 	"minAppVersion": "0.15.0",
 	"description": "为Obsidian添加VSCode风格的代码片段支持。",

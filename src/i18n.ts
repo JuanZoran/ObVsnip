@@ -65,7 +65,7 @@ const translations: Record<LocaleKey, LocaleStrings> = {
 			openMenu: "📋 Open snippet picker",
 		},
 		settings: {
-			title: "📝 Text Snippets Settings",
+			title: "📝 ObVsnip Settings",
 			fileName: "📁 Snippet file",
 			fileDesc: "Choose the VSCode-style JSON that holds your snippets.",
 			chooseButton: "Choose file",
@@ -141,7 +141,7 @@ const translations: Record<LocaleKey, LocaleStrings> = {
 			openMenu: "📋 打开片段选择器",
 		},
 		settings: {
-			title: "📝 文本片段设置",
+			title: "📝 ObVsnip 设置",
 			fileName: "📁 片段文件",
 			fileDesc: "选择储存 VSCode 风格片段的 JSON 文件。",
 			chooseButton: "选择文件",

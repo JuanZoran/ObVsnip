@@ -81,7 +81,7 @@ export class SnippetLoader {
 	 * Log loaded snippets
 	 */
 	private logSnippetsLoaded(filePath: string, snippets: ParsedSnippet[]): void {
-		this.logger.debug("loader", '=== Text Snippets Plugin ===');
+		this.logger.debug("loader", '=== ObVsnip ===');
 		this.logger.debug("loader", `✅ Loaded ${snippets.length} snippets from: ${filePath}`);
 		this.logger.debug("loader", 'Snippets:');
 		snippets.forEach((snippet, index) => {

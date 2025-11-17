@@ -60,7 +60,7 @@ export default class TextSnippetsPlugin extends Plugin {
 	private localeStrings: LocaleStrings = getLocaleStrings("en");
 	async onload() {
 		await this.loadSettings();
-		this.logger.debug("general", "🚀 Loading Text Snippets plugin");
+		this.logger.debug("general", "🚀 Loading ObVsnip plugin");
 		this.refreshLocaleStrings();
 
 		this.snippetLoader = new SnippetLoader(this.app, this.logger);
@@ -111,11 +111,11 @@ export default class TextSnippetsPlugin extends Plugin {
 			window.removeEventListener("keydown", keydownHandler, true)
 		);
 
-		this.logger.debug("general", "✅ Text Snippets plugin loaded");
+		this.logger.debug("general", "✅ ObVsnip plugin loaded");
 	}
 
 	onunload() {
-		this.logger.debug("general", "🛑 Unloading Text Snippets plugin");
+		this.logger.debug("general", "🛑 Unloading ObVsnip plugin");
 		this.snippetMenu?.close();
 	}
 
