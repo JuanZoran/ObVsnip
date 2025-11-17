@@ -97,7 +97,11 @@ class NextTabStopWidget extends WidgetType {
 }
 
 class ChoiceHintWidget extends WidgetType {
-	constructor(private readonly hint: string, private readonly color?: string) {
+	constructor(
+		private readonly hint: string,
+		private readonly choicesLabel?: string,
+		private readonly color?: string
+	) {
 		super();
 	}
 
@@ -107,7 +111,9 @@ class ChoiceHintWidget extends WidgetType {
 		if (this.color) {
 			span.style.color = this.color;
 		}
-		span.textContent = this.hint;
+		span.textContent = this.choicesLabel
+			? `${this.hint}: ${this.choicesLabel}`
+			: this.hint;
 		return span;
 	}
 
@@ -174,9 +180,14 @@ const buildDecorations = (state: EditorState): DecorationSet => {
 		});
 
 		if (isActive && stop.choices && stop.choices.length > 0) {
+			const choicesLabel = stop.choices.join('/');
 			const hintWidget = Decoration.widget({
 				side: 1,
-				widget: new ChoiceHintWidget('↺', widgetConfig.color),
+				widget: new ChoiceHintWidget(
+					'⚙️',
+					choicesLabel,
+					widgetConfig.color
+				),
 			});
 			pending.push({
 				from: stop.end,
