@@ -49,21 +49,21 @@ export class SnippetManager {
             return false;
         }
 
-        this.logger.debug(`\n⏭️  JUMP from $${session.currentIndex}:`);
+        this.logger.debug("manager", `\n⏭️  JUMP from $${session.currentIndex}:`);
 
         let nextTabIndex = session.currentIndex + 1;
         let nextTabStop = session.stops.find((t: SnippetSessionStop) => t.index === nextTabIndex);
 
-        this.logger.debug(`  Looking for $${nextTabIndex}...`);
+        this.logger.debug("manager", `  Looking for $${nextTabIndex}...`);
 
         if (!nextTabStop && session.currentIndex !== 0) {
             nextTabIndex = 0;
             nextTabStop = session.stops.find((t: SnippetSessionStop) => t.index === 0);
-            this.logger.debug(`  No $${session.currentIndex + 1} found, looking for $0...`);
+            this.logger.debug("manager", `  No $${session.currentIndex + 1} found, looking for $0...`);
         }
 
         if (!nextTabStop) {
-            this.logger.debug(`  ❌ No more tab stops, exiting snippet mode`);
+            this.logger.debug("manager", `  ❌ No more tab stops, exiting snippet mode`);
             this.forceExitSnippetMode(getEditorView(editor) ?? undefined);
             if (!silent) new Notice('✅ No more tab stops');
             return false;
@@ -72,7 +72,7 @@ export class SnippetManager {
         this.focusStopByOffset(editor, nextTabStop);
 
         if (nextTabIndex === 0) {
-        this.logger.debug(`  Special case: Stop is $0. Exiting.`);
+        this.logger.debug("manager", `  Special case: Stop is $0. Exiting.`);
             const view = getEditorView(editor);
             this.popSnippetSession(editor);
             const stillActive = view ? view.state.field(snippetSessionField).length > 0 : false;
@@ -102,7 +102,7 @@ export class SnippetManager {
 
         if (prevTabStop && prevTabIndex > 0) {
             this.focusStopByOffset(editor, prevTabStop);
-            this.logger.debug(`← Jump to tab stop $${prevTabIndex}`);
+            this.logger.debug("manager", `← Jump to tab stop $${prevTabIndex}`);
             this.updateSnippetSessionIndex(editor, prevTabIndex);
         } else {
             new Notice('⏮️ No previous tab stops');
@@ -136,7 +136,7 @@ export class SnippetManager {
         }
 
         targetView.dispatch({ effects: clearSnippetSessionsEffect.of(undefined) });
-        this.logger.debug('🔴 Exited snippet mode via force exit');
+        this.logger.debug("manager", '🔴 Exited snippet mode via force exit');
         return true;
     }
 
@@ -147,7 +147,22 @@ export class SnippetManager {
 			index: stop.index,
 			start: baseOffset + stop.start,
 			end: baseOffset + stop.end,
+			choices: stop.choices,
 		}));
+		const choiceStops = stops.filter(
+			(stop) => stop.choices && stop.choices.length > 0
+		);
+		if (choiceStops.length > 0) {
+			const choiceSummary = choiceStops
+				.map(
+					(stop) => `$${stop.index}[${(stop.choices ?? []).join(", ")}]`
+				)
+				.join(", ");
+			this.logger.debug(
+				"manager",
+				`🧩 Choice tab stops detected: ${choiceSummary}`
+			);
+		}
 		view.dispatch({
 			effects: pushSnippetSessionEffect.of({
 				currentIndex: initialIndex,
@@ -171,21 +186,29 @@ export class SnippetManager {
     private insertSnippet(editor: Editor, snippet: ParsedSnippet, line: number, startCh: number, endCh: number): boolean {
         let text = snippet.processedText;
         let tabStops = snippet.tabStops;
-        if (!text || !tabStops || tabStops.length === 0) {
+        let variables = snippet.variables;
+        if (!text || !tabStops || tabStops.length === 0 || !variables) {
             const processed = processSnippetBody(snippet.body, this.logger);
             text = processed.text;
             tabStops = processed.tabStops;
+            variables = processed.variables;
+            snippet.processedText = text;
+            snippet.tabStops = tabStops;
+            snippet.variables = variables;
         }
 
         editor.replaceRange(text, { line, ch: startCh }, { line, ch: endCh });
 
         const baseOffset = editor.posToOffset({ line, ch: startCh });
-        const firstTabStop = tabStops.find(t => t.index === 1) || tabStops.find(t => t.index === 0);
-        if (!firstTabStop) {
-            editor.setCursor({ line, ch: startCh + text.length });
-            this.logger.debug('Snippet has no tab stops; staying in normal mode.');
-            return true;
-        }
+		const positiveStops = tabStops.filter((t) => t.index > 0);
+		const firstTabStop =
+			positiveStops.sort((a, b) => a.index - b.index)[0] ??
+			tabStops.find((t) => t.index === 0);
+		if (!firstTabStop) {
+			editor.setCursor({ line, ch: startCh + text.length });
+			this.logger.debug("manager", 'Snippet has no tab stops; staying in normal mode.');
+			return true;
+		}
 
         const firstStopAbsolute: SnippetSessionStop = {
             index: firstTabStop.index,
@@ -195,7 +218,7 @@ export class SnippetManager {
         this.focusStopByOffset(editor, firstStopAbsolute);
         this.pushSnippetSession(editor, baseOffset, tabStops, firstTabStop.index);
 
-        this.logger.debug(`✨ Expanded snippet: ${snippet.prefix} | Entered snippet mode`);
+        this.logger.debug("manager", `✨ Expanded snippet: ${snippet.prefix} | Entered snippet mode`);
         return true;
     }
 
@@ -214,6 +237,39 @@ export class SnippetManager {
 
     getAvailableSnippets(): ParsedSnippet[] {
         return this.snippetEngine.getSnippets();
+    }
+
+    cycleChoiceAtCurrentStop(): boolean {
+        const editor = this.getActiveEditor();
+        if (!editor) return false;
+
+        const session = this.getCurrentSession(editor);
+        if (!session) return false;
+
+        const stop = session.stops.find((s: SnippetSessionStop) => s.index === session.currentIndex);
+        if (!stop || !stop.choices || stop.choices.length === 0) {
+            return false;
+        }
+
+        const from = editor.offsetToPos(stop.start);
+        const to = editor.offsetToPos(stop.end);
+        const currentText = editor.getRange(from, to);
+        const len = stop.choices.length;
+        const currentIndex = stop.choices.findIndex(choice => choice === currentText);
+        const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % len : 0;
+        const nextValue = stop.choices[nextIndex] ?? '';
+
+        editor.replaceRange(nextValue, from, to);
+
+        const startOffset = editor.posToOffset(from);
+        const newEndOffset = startOffset + nextValue.length;
+        const newEndPos = editor.offsetToPos(newEndOffset);
+
+        editor.setSelection(from, newEndPos);
+
+        this.logger.debug("manager", `🔁 Cycled choice at tab stop $${stop.index}: "${nextValue}"`);
+
+        return true;
     }
 
     private focusStopByOffset(editor: Editor, stop: SnippetSessionStop): void {

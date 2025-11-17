@@ -11,6 +11,7 @@ export interface SnippetSessionStop {
 	start: number;
 	end: number;
 	label?: string;
+	choices?: string[];
 }
 
 export interface SnippetSessionEntry {

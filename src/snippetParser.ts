@@ -27,14 +27,17 @@ export class SnippetParser {
 						...normalized,
 						processedText: processed.text,
 						tabStops: processed.tabStops,
+						variables: processed.variables,
 					});
 				}
 			}
 
 			return snippets;
 		} catch (error) {
+			const message =
+				error instanceof Error ? error.message : String(error);
 			console.error('Failed to parse snippet JSON:', error);
-			return [];
+			throw new Error(`Failed to parse snippet JSON: ${message}`);
 		}
 	}
 
@@ -64,25 +67,4 @@ export class SnippetParser {
 		};
 	}
 
-	/**
-	 * Replace snippet variables with appropriate values
-	 * Supports: $1, $2, ... for tab stops and ${1:default} for defaults
-	 * @param body Snippet body with variables
-	 * @param replacements Map of variable values
-	 * @returns Processed snippet text
-	 */
-	static processVariables(body: string, replacements: Map<number, string> = new Map()): string {
-		let result = body;
-
-		// Replace tab stops with content
-		result = result.replace(/\$\{(\d+):[^}]*\}/g, (match, num) => {
-			return replacements.get(parseInt(num)) || '';
-		});
-
-		result = result.replace(/\$(\d+)/g, (match, num) => {
-			return replacements.get(parseInt(num)) || '';
-		});
-
-		return result;
-	}
 }

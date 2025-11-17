@@ -1,6 +1,17 @@
 import { App, Menu, Notice, PluginSettingTab, Setting, TFile } from "obsidian";
 import type TextSnippetsPlugin from "../main";
 import type { SnippetMenuKeymap } from "./types";
+import type { DebugCategory } from "./logger";
+import type { SnippetSortMode } from "./snippetSuggest";
+
+const DEBUG_CATEGORY_KEYS: DebugCategory[] = [
+	"general",
+	"loader",
+	"parser",
+	"manager",
+	"menu",
+	"session",
+];
 
 export class TextSnippetsSettingsTab extends PluginSettingTab {
 	private plugin: TextSnippetsPlugin;
@@ -12,18 +23,20 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 
 	display(): void {
 		const { containerEl } = this;
+		const strings = this.plugin.getStrings().settings;
 		containerEl.empty();
-		containerEl.createEl("h2", { text: "Text Snippets Settings" });
+		containerEl.createEl("h2", { text: strings.title });
 		this.createFileSelectionSetting();
 		this.createSettingsSection();
 	}
 
 	private createFileSelectionSetting(): void {
 		const { containerEl } = this;
+		const strings = this.plugin.getStrings().settings;
 
 		new Setting(containerEl)
-			.setName("Snippets file")
-			.setDesc("Select a JSON file containing VSCode-style snippets")
+			.setName(strings.fileName)
+			.setDesc(strings.fileDesc)
 			.addText((text) =>
 				text
 					.setPlaceholder("snippets.json")
@@ -32,12 +45,12 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 			)
 			.addButton((btn) =>
 				btn
-					.setButtonText("Choose file")
+					.setButtonText(strings.chooseButton)
 					.setCta()
 					.onClick(() => this.showFileMenu())
 			)
 			.addButton((btn) =>
-				btn.setButtonText("Edit").onClick(async () => {
+				btn.setButtonText(strings.editButton).onClick(async () => {
 					if (!this.plugin.settings.snippetsFilePath) {
 						new Notice("Please select a snippet file first");
 						return;
@@ -49,13 +62,12 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 
 	private createSettingsSection(): void {
 		const { containerEl } = this;
-		containerEl.createEl("h3", { text: "Snippet trigger" });
+		const strings = this.plugin.getStrings().settings;
+		containerEl.createEl("h3", { text: strings.triggerSection });
 
 		new Setting(containerEl)
-			.setName("Trigger key")
-			.setDesc(
-				'Key combination (CodeMirror syntax) used for expand/jump fallback, e.g. "Tab" or "Mod-Enter".'
-			)
+			.setName(strings.triggerName)
+			.setDesc(strings.triggerDesc)
 			.addText((text) =>
 				text
 					.setPlaceholder("Tab")
@@ -67,46 +79,59 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 					})
 			);
 
-		containerEl.createEl("h3", { text: "Snippet picker" });
+		containerEl.createEl("h3", { text: strings.pickerSection });
 		containerEl.createEl("p", {
-			text: "Customize keyboard shortcuts for the inline picker. Leave fields blank to use Obsidian defaults.",
+			text: strings.pickerHint,
 		});
 		this.addMenuKeySetting(
 			containerEl,
 			"next",
-			"Next item",
-			"Move the selection down.",
+			strings.menuKeys.nextName,
+			strings.menuKeys.nextDesc,
 			"ArrowDown"
 		);
 		this.addMenuKeySetting(
 			containerEl,
 			"prev",
-			"Previous item",
-			"Move the selection up.",
+			strings.menuKeys.prevName,
+			strings.menuKeys.prevDesc,
 			"ArrowUp"
 		);
 		this.addMenuKeySetting(
 			containerEl,
 			"accept",
-			"Accept selection",
-			"Insert the highlighted snippet.",
+			strings.menuKeys.acceptName,
+			strings.menuKeys.acceptDesc,
 			"Enter"
 		);
 		this.addMenuKeySetting(
 			containerEl,
 			"toggle",
-			"Toggle picker",
-			"Open or close the picker anywhere.",
+			strings.menuKeys.toggleName,
+			strings.menuKeys.toggleDesc,
 			"Mod-Shift-S"
 		);
 
-		containerEl.createEl("h3", { text: "Virtual text" });
+		new Setting(containerEl)
+			.setName(strings.sortName)
+			.setDesc(strings.sortDesc)
+			.addDropdown((dropdown) =>
+				dropdown
+					.addOption("smart", strings.sortOptions.smart)
+					.addOption("prefix-length", strings.sortOptions.length)
+					.addOption("none", strings.sortOptions.none)
+					.setValue(this.plugin.settings.menuSortMode)
+					.onChange(async (value) => {
+						this.plugin.settings.menuSortMode = value as SnippetSortMode;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		containerEl.createEl("h3", { text: strings.virtualSection });
 
 		new Setting(containerEl)
-			.setName("Show tab stop hints")
-			.setDesc(
-				"Display a ghost-text preview at the next snippet tab stop."
-			)
+			.setName(strings.showHintsName)
+			.setDesc(strings.showHintsDesc)
 			.addToggle((toggle) =>
 				toggle
 					.setValue(this.plugin.settings.showVirtualText)
@@ -117,13 +142,11 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 					})
 			);
 
-		containerEl.createEl("h3", { text: "Debugging" });
+		containerEl.createEl("h3", { text: strings.debugSection });
 
 		new Setting(containerEl)
-			.setName("Enable debug mode")
-			.setDesc(
-				"Controls whether the plugin prints diagnostic information to the developer console."
-			)
+			.setName(strings.debugName)
+			.setDesc(strings.debugDesc)
 			.addToggle((toggle) =>
 				toggle
 					.setValue(this.plugin.settings.enableDebugLogs)
@@ -131,8 +154,59 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 						this.plugin.settings.enableDebugLogs = value;
 						await this.plugin.saveSettings();
 						this.plugin.applyRuntimeSettings();
+						this.toggleDebugModuleControls(modulesWrapper, value);
 					})
 			);
+
+		const modulesWrapper = containerEl.createDiv();
+		this.renderDebugModuleSettings(modulesWrapper, strings);
+		this.toggleDebugModuleControls(
+			modulesWrapper,
+			this.plugin.settings.enableDebugLogs
+		);
+	}
+
+	private renderDebugModuleSettings(
+		containerEl: HTMLElement,
+		strings: ReturnType<TextSnippetsPlugin["getStrings"]>["settings"]
+	): void {
+		new Setting(containerEl)
+			.setName(strings.debugCategoriesName)
+			.setDesc(strings.debugCategoriesDesc);
+
+		const categoryLabels = strings.debugCategoryOptions;
+		DEBUG_CATEGORY_KEYS.forEach((key) => {
+			new Setting(containerEl)
+				.setName(categoryLabels[key])
+				.addToggle((toggle) =>
+					toggle
+						.setValue(
+							this.plugin.settings.debugCategories.includes(key)
+						)
+						.onChange(async (value) => {
+							const categories = new Set(
+								this.plugin.settings.debugCategories
+							);
+							if (value) {
+								categories.add(key);
+							} else {
+								categories.delete(key);
+							}
+							this.plugin.settings.debugCategories = Array.from(
+								categories
+							);
+							await this.plugin.saveSettings();
+							this.plugin.applyRuntimeSettings();
+						})
+				);
+		});
+	}
+
+	private toggleDebugModuleControls(
+		container: HTMLElement,
+		enabled: boolean
+	): void {
+		container.style.display = enabled ? "" : "none";
 	}
 
 	private showFileMenu(): void {

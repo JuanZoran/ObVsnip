@@ -15,13 +15,13 @@ export class SnippetLoader {
 	 * @returns Array of parsed snippets
 	 */
 	async loadFromFile(filePath: string): Promise<ParsedSnippet[]> {
-		if (!filePath) {
-			console.warn('Snippets file path is not set');
-			return [];
-		}
 
 		try {
-			this.logger.debug(`📂 Loading snippets from: ${filePath}`);
+			this.logger.debug("loader", `📂 Loading snippets from: ${filePath}`);
+
+			if (!filePath) {
+				throw new Error('Snippets file path is not set');
+			}
 
 			const file = this.app.vault.getAbstractFileByPath(filePath);
 			if (!file) {
@@ -36,15 +36,24 @@ export class SnippetLoader {
 			}
 
 			const content = await this.app.vault.read(file as TFile);
-			this.logger.debug(`✅ Read file: ${content.length} characters`);
+			this.logger.debug("loader", `✅ Read file: ${content.length} characters`);
 
-			const snippets = SnippetParser.parseJson(content, this.logger);
+			let snippets: ParsedSnippet[];
+			try {
+				snippets = SnippetParser.parseJson(content, this.logger);
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error);
+				console.error(message);
+				new Notice(`Error: ${message}`, 5000);
+				return [];
+			}
 			this.logSnippetsLoaded(filePath, snippets);
 
 			return snippets;
 		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
 			console.error('Failed to load snippets:', error);
-			new Notice('Error: Failed to load snippets. Check file path in settings.', 5000);
+			new Notice(`Error: Failed to load snippets. ${message}`, 5000);
 			return [];
 		}
 	}
@@ -63,22 +72,22 @@ export class SnippetLoader {
 	 * Log available files for debugging
 	 */
 	private logAvailableFiles(): void {
-		this.logger.debug('Available files in vault:');
+		this.logger.debug("loader", 'Available files in vault:');
 		const files = this.getTextFiles();
-		files.slice(0, 10).forEach(f => this.logger.debug(`  - ${f.path}`));
+		files.slice(0, 10).forEach(f => this.logger.debug("loader", `  - ${f.path}`));
 	}
 
 	/**
 	 * Log loaded snippets
 	 */
 	private logSnippetsLoaded(filePath: string, snippets: ParsedSnippet[]): void {
-		this.logger.debug('=== Text Snippets Plugin ===');
-		this.logger.debug(`✅ Loaded ${snippets.length} snippets from: ${filePath}`);
-		this.logger.debug('Snippets:');
+		this.logger.debug("loader", '=== Text Snippets Plugin ===');
+		this.logger.debug("loader", `✅ Loaded ${snippets.length} snippets from: ${filePath}`);
+		this.logger.debug("loader", 'Snippets:');
 		snippets.forEach((snippet, index) => {
 			const preview = snippet.body.substring(0, 50).replace(/\n/g, '\\n');
-			this.logger.debug(`  [${index + 1}] "${snippet.prefix}" → "${preview}${snippet.body.length > 50 ? '...' : ''}"`);
+			this.logger.debug("loader", `  [${index + 1}] "${snippet.prefix}" → "${preview}${snippet.body.length > 50 ? '...' : ''}"`);
 		});
-		this.logger.debug('============================');
+		this.logger.debug("loader", '============================');
 	}
 }

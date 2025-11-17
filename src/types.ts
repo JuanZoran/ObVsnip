@@ -20,6 +20,7 @@ export interface ParsedSnippet extends VscodeSnippet {
 	body: string; // body is always a string in parsed format
 	processedText: string;
 	tabStops: TabStopInfo[];
+	variables?: SnippetVariableInfo[];
 }
 
 /**
@@ -56,6 +57,14 @@ export interface TabStopInfo {
 	index: number;      // $1, $2, $0
 	start: number;      // Start position in line
 	end: number;        // End position in line (for range)
+	choices?: string[]; // Optional choice list for ${1|a,b|}
+}
+
+export interface SnippetVariableInfo {
+	name: string;       // e.g., TM_FILENAME
+	start: number;      // Start position in processed text
+	end: number;        // End position after default text insertion
+	defaultValue?: string;
 }
 
 /**

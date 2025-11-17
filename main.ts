@@ -3,6 +3,7 @@ import { Compartment } from "@codemirror/state";
 import type { Extension } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 import type { ParsedSnippet, SnippetMenuKeymap } from "./src/types";
+import type { SnippetSortMode } from "./src/snippetSuggest";
 import { SnippetLoader } from "./src/snippetLoader";
 import { SnippetEngine } from "./src/snippetEngine";
 import {
@@ -11,24 +12,29 @@ import {
 } from "./src/snippetSession";
 import { SnippetManager } from "./src/snippetManager";
 import { PluginLogger } from "./src/logger";
+import type { DebugCategory } from "./src/logger";
 import { getEditorView } from "./src/editorUtils";
 import { TextSnippetsSettingsTab } from "./src/settingsTab";
 import { buildTriggerKeymapExtension } from "./src/keymap";
 import { SnippetCompletionMenu } from "./src/snippetSuggest";
+import {
+	getLocaleStrings,
+	type LocaleStrings,
+} from "./src/i18n";
 
 interface PluginSettings {
 	snippetsFilePath: string;
-	snippets: ParsedSnippet[];
 	showVirtualText: boolean;
 	virtualTextColor: string;
 	enableDebugLogs: boolean;
 	triggerKey: string;
 	menuKeymap: SnippetMenuKeymap;
+	menuSortMode: SnippetSortMode;
+	debugCategories: DebugCategory[];
 }
 
 const DEFAULT_SETTINGS: PluginSettings = {
 	snippetsFilePath: "",
-	snippets: [],
 	showVirtualText: true,
 	virtualTextColor: "var(--text-muted)",
 	enableDebugLogs: false,
@@ -37,8 +43,10 @@ const DEFAULT_SETTINGS: PluginSettings = {
 		next: "ArrowDown",
 		prev: "ArrowUp",
 		accept: "Enter",
-		toggle: "Mod-Shift-S",
+		toggle: "Ctrl-Space",
 	},
+	menuSortMode: "smart",
+	debugCategories: [],
 };
 
 export default class TextSnippetsPlugin extends Plugin {
@@ -49,9 +57,11 @@ export default class TextSnippetsPlugin extends Plugin {
 	private snippetManager: SnippetManager;
 	private logger = new PluginLogger();
 	private snippetMenu: SnippetCompletionMenu;
+	private localeStrings: LocaleStrings = getLocaleStrings("en");
 	async onload() {
 		await this.loadSettings();
-		this.logger.debug("🚀 Loading Text Snippets plugin");
+		this.logger.debug("general", "🚀 Loading Text Snippets plugin");
+		this.refreshLocaleStrings();
 
 		this.snippetLoader = new SnippetLoader(this.app, this.logger);
 		this.snippetEngine = new SnippetEngine([]);
@@ -86,6 +96,7 @@ export default class TextSnippetsPlugin extends Plugin {
 			getSnippets: () => this.snippetEngine.getSnippets(),
 			manager: this.snippetManager,
 			logger: this.logger,
+			getSortMode: () => this.settings.menuSortMode,
 		});
 		this.registerEvent(
 			this.app.workspace.on("active-leaf-change", () => {
@@ -100,11 +111,11 @@ export default class TextSnippetsPlugin extends Plugin {
 			window.removeEventListener("keydown", keydownHandler, true)
 		);
 
-		this.logger.debug("✅ Text Snippets plugin loaded");
+		this.logger.debug("general", "✅ Text Snippets plugin loaded");
 	}
 
 	onunload() {
-		this.logger.debug("🛑 Unloading Text Snippets plugin");
+		this.logger.debug("general", "🛑 Unloading Text Snippets plugin");
 		this.snippetMenu?.close();
 	}
 
@@ -122,6 +133,12 @@ export default class TextSnippetsPlugin extends Plugin {
 		if (!this.settings.virtualTextColor) {
 			this.settings.virtualTextColor = "var(--text-muted)";
 		}
+		if (!this.settings.menuSortMode) {
+			this.settings.menuSortMode = DEFAULT_SETTINGS.menuSortMode;
+		}
+		if (!Array.isArray(this.settings.debugCategories)) {
+			this.settings.debugCategories = [];
+		}
 	}
 
 	async saveSettings() {
@@ -132,7 +149,6 @@ export default class TextSnippetsPlugin extends Plugin {
 		const snippets = await this.snippetLoader.loadFromFile(
 			this.settings.snippetsFilePath
 		);
-		this.settings.snippets = snippets;
 		this.snippetEngine.setSnippets(snippets);
 
 		if (snippets.length > 0) {
@@ -145,42 +161,65 @@ export default class TextSnippetsPlugin extends Plugin {
 	private registerCommands(): void {
 		this.addCommand({
 			id: "text-snippets-expand",
-			name: "Expand snippet",
-			callback: () => this.snippetManager.expandSnippet(),
+			name: this.localeStrings.commands.expand,
+			editorCheckCallback: (checking, editor) => {
+				const hasEditor =
+					editor ||
+					this.app.workspace.getActiveViewOfType(MarkdownView)?.editor;
+				if (checking) return !!hasEditor;
+				return this.snippetManager.expandSnippet();
+			},
 			hotkeys: [{ modifiers: ["Mod"], key: "Enter" }],
 		});
 
 		this.addCommand({
 			id: "text-snippets-jump-next",
-			name: "Jump to next tab stop",
-			callback: () => this.snippetManager.jumpToNextTabStop(),
+			name: this.localeStrings.commands.jumpNext,
+			editorCheckCallback: (checking, editor) => {
+				const hasEditor =
+					editor ||
+					this.app.workspace.getActiveViewOfType(MarkdownView)?.editor;
+				if (checking) return !!hasEditor;
+				return this.snippetManager.jumpToNextTabStop();
+			},
 			hotkeys: [{ modifiers: ["Mod"], key: "Tab" }],
 		});
 
 		this.addCommand({
 			id: "text-snippets-jump-prev",
-			name: "Jump to previous tab stop",
-			callback: () => this.snippetManager.jumpToPrevTabStop(),
+			name: this.localeStrings.commands.jumpPrev,
+			editorCheckCallback: (checking, editor) => {
+				const hasEditor =
+					editor ||
+					this.app.workspace.getActiveViewOfType(MarkdownView)?.editor;
+				if (checking) return !!hasEditor;
+				this.snippetManager.jumpToPrevTabStop();
+				return true;
+			},
 			hotkeys: [{ modifiers: ["Mod", "Shift"], key: "Tab" }],
 		});
 
 		this.addCommand({
 			id: "text-snippets-reload",
-			name: "Reload snippets from file",
+			name: this.localeStrings.commands.reload,
 			callback: () => this.reloadSnippetsCommand(),
 		});
 
 		this.addCommand({
 			id: "text-snippets-debug",
-			name: "Debug: Print all snippets to console",
+			name: this.localeStrings.commands.debug,
 			callback: () => this.debugPrintSnippets(),
 		});
 
 		this.addCommand({
 			id: "text-snippets-open-menu",
-			name: "Open snippet menu",
-			editorCallback: (editor) => {
-				this.openSnippetMenu(editor);
+			name: this.localeStrings.commands.openMenu,
+			editorCheckCallback: (checking, editor) => {
+				const hasEditor =
+					editor ||
+					this.app.workspace.getActiveViewOfType(MarkdownView)?.editor;
+				if (checking) return !!hasEditor;
+				return this.openSnippetMenu(editor);
 			},
 			hotkeys: [{ modifiers: ["Mod", "Shift"], key: "S" }],
 		});
@@ -192,7 +231,7 @@ export default class TextSnippetsPlugin extends Plugin {
 			return;
 		}
 
-		this.logger.debug("📂 Reloading snippets...");
+		this.logger.debug("general", "📂 Reloading snippets...");
 		await this.loadSnippetsFromFile();
 	}
 
@@ -234,14 +273,15 @@ export default class TextSnippetsPlugin extends Plugin {
 		if (this.snippetManager.jumpToNextTabStop({ silent: true })) {
 			return true;
 		}
-		return this.openSnippetMenu(
-			this.snippetManager.getActiveEditor() ?? undefined
-		);
+		return false;
 	}
 
 	private handleMenuToggleShortcut(_view: EditorView): boolean {
 		const editor = this.snippetManager.getActiveEditor();
 		if (!editor) return false;
+		if (this.snippetManager.cycleChoiceAtCurrentStop()) {
+			return true;
+		}
 		const query = this.extractQueryFragment(editor);
 		return this.snippetMenu.toggle(editor, query);
 	}
@@ -268,9 +308,7 @@ export default class TextSnippetsPlugin extends Plugin {
 
 	public applyRuntimeSettings(): void {
 		this.logger.setEnabled(this.settings.enableDebugLogs);
-		if (this.snippetEngine) {
-			this.snippetEngine.setLogger(this.logger);
-		}
+		this.logger.setCategories(this.settings.debugCategories);
 		setSnippetWidgetConfig({
 			enabled: this.settings.showVirtualText,
 			color: this.settings.virtualTextColor,
@@ -328,5 +366,34 @@ export default class TextSnippetsPlugin extends Plugin {
 
 	getSnippetLoader(): SnippetLoader {
 		return this.snippetLoader;
+	}
+
+	getStrings(): LocaleStrings {
+		return this.localeStrings;
+	}
+
+	private refreshLocaleStrings(): void {
+		const locale = this.getCurrentLocale();
+		this.localeStrings = getLocaleStrings(locale);
+	}
+
+	private getCurrentLocale(): string | undefined {
+		const vaultWithLocale = this.app.vault as typeof this.app.vault & {
+			getConfig?: (key: string) => unknown;
+		};
+		const configKeys = ["locale", "language"];
+		for (const key of configKeys) {
+			const raw = vaultWithLocale.getConfig?.(key);
+			if (typeof raw === "string" && raw.length > 0) {
+				return raw;
+			}
+		}
+		if (typeof window !== "undefined" && window.localStorage) {
+			for (const key of ["language", "locale"]) {
+				const stored = window.localStorage.getItem(key);
+				if (stored) return stored;
+			}
+		}
+		return undefined;
 	}
 }

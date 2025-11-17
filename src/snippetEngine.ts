@@ -1,5 +1,4 @@
 import { ParsedSnippet, TrieNode, PrefixInfo } from "./types";
-import { PluginLogger } from "./logger";
 
 /**
  * Snippet expansion engine with Trie-based prefix matching
@@ -8,7 +7,6 @@ export class SnippetEngine {
 	private snippets: ParsedSnippet[] = [];
 	private trie: TrieNode = { children: new Map() };
 	private prefixInfo: PrefixInfo = { minLength: 0, maxLength: 0 };
-	private logger: PluginLogger | null = null;
 
 	constructor(snippets: ParsedSnippet[] = []) {
 		this.setSnippets(snippets);
@@ -21,14 +19,6 @@ export class SnippetEngine {
 		this.snippets = snippets;
 		this.buildTrie();
 		this.calculatePrefixRange();
-	}
-
-	setLogger(logger: PluginLogger): void {
-		this.logger = logger;
-	}
-
-	private logDebug(...data: unknown[]): void {
-		this.logger?.debug(...data);
 	}
 
 	/**

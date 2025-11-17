@@ -1,4 +1,4 @@
-import { App, Editor, MarkdownView } from "obsidian";
+import { App, Editor, MarkdownView, type EditorPosition } from "obsidian";
 
 import type { ParsedSnippet } from "./types";
 
@@ -8,12 +8,16 @@ import { PluginLogger } from "./logger";
 
 import { getEditorView } from "./editorUtils";
 
+export type SnippetSortMode = "none" | "smart" | "prefix-length";
+
 interface SnippetMenuOptions {
 	getSnippets: () => ParsedSnippet[];
 
 	manager: SnippetManager;
 
 	logger: PluginLogger;
+
+	getSortMode: () => SnippetSortMode;
 }
 
 export class SnippetCompletionMenu {
@@ -41,17 +45,34 @@ export class SnippetCompletionMenu {
 
 	private emptyStateMessage: string | null = null;
 
+	private anchorCoords: { top: number; left: number } | null = null;
+
+	private initialSelection: { from: EditorPosition; to: EditorPosition } | null =
+		null;
+
+	private hadInitialSelection = false;
+
+	private mouseMovedSinceOpen = false;
+
+	private boundReposition: () => void;
+
+	private boundPointerMove: () => void;
+
+	private queryAnchorPos: EditorPosition | null = null;
+
 	constructor(private app: App, private options: SnippetMenuOptions) {
 		this.boundKeydown = this.handleKeydown.bind(this);
 
 		this.boundClick = this.handleClickOutside.bind(this);
+		this.boundReposition = this.handleReposition.bind(this);
+		this.boundPointerMove = this.handlePointerMove.bind(this);
 	}
 
 	open(editor?: Editor | null, initialQuery = ""): boolean {
 		const targetEditor = editor ?? this.getActiveEditor();
 
 		if (!targetEditor) {
-			this.options.logger.debug("[SnippetMenu] open: no active editor");
+			this.options.logger.debug("menu", "[SnippetMenu] open: no active editor");
 
 			return false;
 		}
@@ -59,31 +80,39 @@ export class SnippetCompletionMenu {
 		this.close();
 
 		this.currentEditor = targetEditor;
+		this.captureInitialSelection(targetEditor);
+		this.mouseMovedSinceOpen = false;
 
 		this.currentQuery = initialQuery ?? "";
+		this.setQueryAnchor(targetEditor);
 
-		const hasEntries = this.updateEntriesForQuery(this.currentQuery);
+			const hasEntries = this.updateEntriesForQuery(this.currentQuery);
 
 		if (!hasEntries) {
-			this.options.logger.debug(
-				"[SnippetMenu] open: no snippets match query"
-			);
+				this.options.logger.debug(
+					"menu",
+					"[SnippetMenu] open: no snippets match query"
+				);
 
 			return false;
 		}
 
-		const coords = this.getCursorCoords(targetEditor);
+			const coords = this.getCursorCoords(targetEditor);
+			this.anchorCoords = coords;
 
-		this.render(coords);
+			this.render(coords);
 
-		this.selectIndex(0);
+			this.selectIndex(0);
 
-		window.addEventListener("keydown", this.boundKeydown, true);
+			window.addEventListener("keydown", this.boundKeydown, true);
 
 		window.addEventListener("mousedown", this.boundClick, true);
+		window.addEventListener("scroll", this.boundReposition, true);
+		window.addEventListener("resize", this.boundReposition, true);
+		window.addEventListener("pointermove", this.boundPointerMove, true);
 
-		return true;
-	}
+			return true;
+		}
 
 	close(): void {
 		if (this.container?.parentElement) {
@@ -95,8 +124,16 @@ export class SnippetCompletionMenu {
 		window.removeEventListener("keydown", this.boundKeydown, true);
 
 		window.removeEventListener("mousedown", this.boundClick, true);
+		window.removeEventListener("scroll", this.boundReposition, true);
+		window.removeEventListener("resize", this.boundReposition, true);
+		window.removeEventListener("pointermove", this.boundPointerMove, true);
 
 		this.currentEditor = null;
+		this.anchorCoords = null;
+		this.initialSelection = null;
+		this.hadInitialSelection = false;
+		this.mouseMovedSinceOpen = false;
+		this.queryAnchorPos = null;
 	}
 
 	isOpen(): boolean {
@@ -140,14 +177,82 @@ export class SnippetCompletionMenu {
 
 		const snippets = this.options.getSnippets();
 
-		if (!normalized) return snippets;
+		if (!normalized) {
+			return this.applySort([...snippets], normalized, true);
+		}
 
-		return snippets.filter(
+		const filtered = snippets.filter(
 			(snippet) =>
 				snippet.prefix.toLowerCase().includes(normalized) ||
 				(snippet.description?.toLowerCase().includes(normalized) ??
 					false)
 		);
+
+		return this.applySort(filtered, normalized, false);
+	}
+
+	private applySort(
+		entries: ParsedSnippet[],
+		normalizedQuery: string,
+		isEmptyQuery: boolean
+	): ParsedSnippet[] {
+		const mode = this.options.getSortMode?.() ?? "none";
+		if (mode === "none") {
+			return entries;
+		}
+
+		if (mode === "prefix-length") {
+			return this.sortByLength(entries);
+		}
+
+		if (!normalizedQuery) {
+			if (isEmptyQuery) {
+				return entries;
+			}
+			return this.sortByLength(entries);
+		}
+
+		const scored = entries.map((snippet) => {
+			const priority = this.getSmartPriority(snippet, normalizedQuery);
+			return {
+				snippet,
+				priority,
+				length: snippet.prefix.length,
+				alpha: snippet.prefix.toLowerCase(),
+			};
+		});
+
+		scored.sort((a, b) => {
+			if (a.priority !== b.priority) {
+				return a.priority - b.priority;
+			}
+			if (a.length !== b.length) {
+				return a.length - b.length;
+			}
+			return a.alpha.localeCompare(b.alpha);
+		});
+
+		return scored.map((item) => item.snippet);
+	}
+
+	private sortByLength(entries: ParsedSnippet[]): ParsedSnippet[] {
+		return [...entries].sort((a, b) => {
+			const lengthDiff = a.prefix.length - b.prefix.length;
+			if (lengthDiff !== 0) return lengthDiff;
+			return a.prefix.localeCompare(b.prefix);
+		});
+	}
+
+	private getSmartPriority(
+		snippet: ParsedSnippet,
+		query: string
+	): number {
+		const prefixLower = snippet.prefix.toLowerCase();
+		if (prefixLower === query) return 0;
+		if (prefixLower.startsWith(query)) return 1;
+		if (prefixLower.includes(query)) return 2;
+		if (snippet.description?.toLowerCase().includes(query)) return 3;
+		return 4;
 	}
 
 	private render(coords: { top: number; left: number }): void {
@@ -176,16 +281,17 @@ export class SnippetCompletionMenu {
 
 		this.previewDescEl = preview.createDiv({ cls: "snippet-preview-desc" });
 
-		this.previewBodyEl = preview.createEl("pre", {
-			cls: "snippet-preview-body",
-		});
+			this.previewBodyEl = preview.createEl("pre", {
+				cls: "snippet-preview-body",
+			});
 
-		document.body.appendChild(container);
+			document.body.appendChild(container);
 
-		this.container = container;
+			this.container = container;
+			this.positionContainer(coords);
 	}
 
-	private selectIndex(index: number): void {
+	private selectIndex(index: number, options?: { preventScroll?: boolean }): void {
 		if (!this.listEl || this.entries.length === 0) return;
 
 		if (index < 0) index = this.entries.length - 1;
@@ -206,7 +312,7 @@ export class SnippetCompletionMenu {
 
 		const activeItem = items[index];
 
-		if (activeItem) {
+		if (activeItem && !options?.preventScroll) {
 			activeItem.scrollIntoView({ block: "nearest" });
 		}
 	}
@@ -304,22 +410,16 @@ export class SnippetCompletionMenu {
 			return;
 		}
 
-		const cursor = this.currentEditor.getCursor();
+		const replacementRange = this.getReplacementRange(
+			snippet,
+			this.currentEditor
+		);
 
-		const latestQuery = this.extractQuery(this.currentEditor);
-
-		const prefixLength = latestQuery.length;
-
-		const from = {
-			line: cursor.line,
-
-			ch: Math.max(0, cursor.ch - prefixLength),
-		};
-
-		this.currentEditor.setSelection(from, cursor);
+		this.currentEditor.setSelection(replacementRange.from, replacementRange.to);
 
 		this.options.logger.debug(
-			`[SnippetMenu] Applying snippet ${snippet.prefix}, replacing prefix "${latestQuery}"`
+			"menu",
+			`[SnippetMenu] Applying snippet ${snippet.prefix}`
 		);
 
 		this.options.manager.applySnippetAtCursor(snippet, this.currentEditor);
@@ -363,6 +463,128 @@ export class SnippetCompletionMenu {
 		const match = prefix.match(/(\S+)$/);
 
 		return match?.[0] ?? "";
+	}
+
+	private positionContainer(coords: { top: number; left: number }): void {
+		if (!this.container) return;
+
+		const margin = 12;
+		const containerRect = this.container.getBoundingClientRect();
+		const width = containerRect.width || 300;
+		const height = containerRect.height || 200;
+		const maxLeft = Math.max(margin, window.innerWidth - width - margin);
+		const maxTop = Math.max(margin, window.innerHeight - height - margin);
+		const clampedLeft = Math.min(Math.max(margin, coords.left), maxLeft);
+		const clampedTop = Math.min(Math.max(margin, coords.top), maxTop);
+
+		this.container.style.left = `${clampedLeft}px`;
+		this.container.style.top = `${clampedTop}px`;
+	}
+
+	private handleReposition(): void {
+		if (!this.currentEditor) return;
+		const coords = this.getCursorCoords(this.currentEditor);
+		this.anchorCoords = coords;
+		this.positionContainer(coords);
+	}
+
+	private captureInitialSelection(editor: Editor): void {
+		const from = editor.getCursor("from");
+		const to = editor.getCursor("to");
+		this.initialSelection = { from, to };
+		this.hadInitialSelection = from.line !== to.line || from.ch !== to.ch;
+	}
+
+	private getReplacementRange(
+		snippet: ParsedSnippet,
+		editor: Editor
+	): { from: EditorPosition; to: EditorPosition } {
+		const cursor = editor.getCursor();
+
+		if (this.initialSelection && this.hadInitialSelection) {
+			return {
+				from: this.initialSelection.from,
+				to: this.initialSelection.to,
+			};
+		}
+
+		const prefix = snippet.prefix;
+		const startCh = cursor.ch - prefix.length;
+		if (startCh >= 0) {
+			const from = { line: cursor.line, ch: startCh };
+			const existingText = editor.getRange(from, cursor);
+			if (
+				existingText &&
+				existingText.toLowerCase() === prefix.toLowerCase()
+			) {
+				return { from, to: cursor };
+			}
+		}
+
+		const overlapLength = this.findPrefixOverlapLength(snippet, editor);
+		if (overlapLength > 0) {
+			return {
+				from: { line: cursor.line, ch: cursor.ch - overlapLength },
+				to: cursor,
+			};
+		}
+
+		const anchorRange = this.getAnchorRange(editor);
+		if (anchorRange) {
+			return anchorRange;
+		}
+
+		const latestQuery = this.extractQuery(editor);
+		const queryStart = Math.max(0, cursor.ch - latestQuery.length);
+		return {
+			from: { line: cursor.line, ch: queryStart },
+			to: cursor,
+		};
+	}
+
+	private setQueryAnchor(editor: Editor): void {
+		const cursor = editor.getCursor();
+		const initialQuery = this.currentQuery ?? "";
+		const startCh = Math.max(0, cursor.ch - initialQuery.length);
+		this.queryAnchorPos = { line: cursor.line, ch: startCh };
+	}
+
+	private getAnchorRange(
+		editor: Editor
+	): { from: EditorPosition; to: EditorPosition } | null {
+		if (!this.queryAnchorPos) return null;
+		const cursor = editor.getCursor();
+		if (cursor.line !== this.queryAnchorPos.line) {
+			return null;
+		}
+		if (cursor.ch < this.queryAnchorPos.ch) {
+			return null;
+		}
+		return {
+			from: this.queryAnchorPos,
+			to: cursor,
+		};
+	}
+
+	private findPrefixOverlapLength(snippet: ParsedSnippet, editor: Editor): number {
+		const cursor = editor.getCursor();
+		const lineText = editor.getLine(cursor.line) ?? "";
+		const beforeCursor = lineText.slice(0, cursor.ch);
+		if (!beforeCursor) return 0;
+
+		const prefixLower = snippet.prefix.toLowerCase();
+		const textLower = beforeCursor.toLowerCase();
+		const maxLength = Math.min(prefixLower.length, textLower.length);
+
+		for (let len = maxLength; len > 0; len--) {
+			const textSuffix = textLower.slice(-len);
+			const prefixSub = prefixLower.substring(0, len);
+			if (textSuffix === prefixSub) {
+				return len;
+			}
+		}
+
+		return 0;
 	}
 
 	private updateEntriesForQuery(query: string): boolean {
@@ -421,6 +643,15 @@ export class SnippetCompletionMenu {
 
 				this.applySelection(index);
 			});
+
+			item.addEventListener("mouseenter", () => {
+				if (!this.mouseMovedSinceOpen) return;
+				this.selectIndex(index, { preventScroll: true });
+			});
 		});
+	}
+
+	private handlePointerMove(): void {
+		this.mouseMovedSinceOpen = true;
 	}
 }
