@@ -48,6 +48,9 @@ export interface LocaleStrings {
 		debugCategoriesName: string;
 		debugCategoriesDesc: string;
 		debugCategoryOptions: Record<DebugCategory, string>;
+		variableHelpName: string;
+		variableHelpDesc: string;
+		variableDetails: Record<string, string>;
 	};
 }
 
@@ -109,6 +112,23 @@ const translations: Record<LocaleKey, LocaleStrings> = {
 				menu: "Menu / UI",
 				session: "Session",
 			},
+			variableHelpName: "Built-in variables",
+			variableHelpDesc: "Available variables and usage.",
+			variableDetails: {
+				TM_FILENAME: "Active file name (with extension)",
+				TM_FILEPATH: "Active file path relative to the vault",
+				TM_FOLDER: "Name of the folder containing the active file",
+				VAULT_NAME: "Current vault name",
+				TM_SELECTED_TEXT: "Currently selected text in the editor",
+				TM_CLIPBOARD: "Current clipboard text (desktop only)",
+				CURRENT_YEAR: "Current year (YYYY)",
+				CURRENT_MONTH: "Current month (MM)",
+				CURRENT_DATE: "Current date (YYYY-MM-DD)",
+				CURRENT_HOUR: "Current hour (HH, 24-hour)",
+				CURRENT_MINUTE: "Current minute (MM)",
+				CURRENT_SECOND: "Current second (SS)",
+				TIME_FORMATTED: "Current time (HH:mm:ss)",
+			},
 		},
 	},
 	zh: {
@@ -163,6 +183,23 @@ const translations: Record<LocaleKey, LocaleStrings> = {
 				manager: "管理器",
 				menu: "菜单 / UI",
 				session: "会话",
+			},
+			variableHelpName: "内置变量",
+			variableHelpDesc: "可用变量与说明。",
+			variableDetails: {
+				TM_FILENAME: "当前文件名（包含扩展名）",
+				TM_FILEPATH: "当前文件在仓库中的路径",
+				TM_FOLDER: "当前文件所在文件夹名称",
+				VAULT_NAME: "当前仓库名称",
+				TM_SELECTED_TEXT: "编辑器中当前选中的文本",
+				TM_CLIPBOARD: "当前剪贴板文本（仅桌面版）",
+				CURRENT_YEAR: "当前年份（YYYY）",
+				CURRENT_MONTH: "当前月份（MM）",
+				CURRENT_DATE: "当前日期（YYYY-MM-DD）",
+				CURRENT_HOUR: "当前小时（HH，24 小时制）",
+				CURRENT_MINUTE: "当前分钟（MM）",
+				CURRENT_SECOND: "当前秒钟（SS）",
+				TIME_FORMATTED: "当前时间（HH:mm:ss）",
 			},
 		},
 	},

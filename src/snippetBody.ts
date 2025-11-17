@@ -1,12 +1,16 @@
 import { PluginLogger } from './logger';
 import { TabStopInfo, SnippetVariableInfo } from './types';
 
-const BUILTIN_VARIABLES = new Set([
+export const BUILTIN_VARIABLES = new Set([
 	"TM_FILENAME",
 	"TM_FILEPATH",
+	"TM_FOLDER",
+	"VAULT_NAME",
+	"TM_CLIPBOARD",
 	"CURRENT_YEAR",
 	"CURRENT_MONTH",
 	"CURRENT_DATE",
+	"TIME_FORMATTED",
 	"TM_SELECTED_TEXT",
 	"CURRENT_HOUR",
 	"CURRENT_MINUTE",
@@ -67,7 +71,8 @@ export const processSnippetBody = (body: string, logger?: PluginLogger): Process
 		logger?.debug("parser", `🔤 Variables:`);
 		variables.forEach(variable => {
 			const defaultInfo = variable.defaultValue ? ` default="${variable.defaultValue}"` : '';
-			logger?.debug("parser", `   ${variable.name}: start=${variable.start}, end=${variable.end}${defaultInfo}`);
+			const knownInfo = BUILTIN_VARIABLES.has(variable.name) ? "" : " (unknown)";
+			logger?.debug("parser", `   ${variable.name}: start=${variable.start}, end=${variable.end}${defaultInfo}${knownInfo}`);
 		});
 	}
 
@@ -294,7 +299,7 @@ class SnippetBodyParser {
 		if (ch === '{') {
 			this.index++;
 			const name = this.readIdentifier();
-			if (!name || !BUILTIN_VARIABLES.has(name)) {
+			if (!name) {
 				this.index = startIndex;
 				return null;
 			}
@@ -326,7 +331,7 @@ class SnippetBodyParser {
 		}
 
 		const name = this.readIdentifier();
-		if (!name || !BUILTIN_VARIABLES.has(name)) {
+		if (!name) {
 			this.index = startIndex;
 			return null;
 		}

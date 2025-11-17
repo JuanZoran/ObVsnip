@@ -2,7 +2,7 @@ import { App, Editor, MarkdownView, Notice } from 'obsidian';
 import type { EditorView } from '@codemirror/view';
 import { SnippetEngine } from './snippetEngine';
 import { PluginLogger } from './logger';
-import { ParsedSnippet, TabStopInfo } from './types';
+import { ParsedSnippet, TabStopInfo, SnippetVariableInfo } from './types';
 import { processSnippetBody } from './snippetBody';
 import {
     pushSnippetSessionEffect,
@@ -14,6 +14,7 @@ import {
     SnippetSessionEntry,
 } from './snippetSession';
 import { getEditorView } from './editorUtils';
+import { resolveVariableValue } from './variableResolver';
 
 export class SnippetManager {
     constructor(private app: App, private snippetEngine: SnippetEngine, private logger: PluginLogger) {}
@@ -197,6 +198,15 @@ export class SnippetManager {
             snippet.variables = variables;
         }
 
+        const variableResult = this.applyVariablesToText(
+            text,
+            tabStops,
+            variables,
+            editor
+        );
+        text = variableResult.text;
+        tabStops = variableResult.tabStops;
+
         editor.replaceRange(text, { line, ch: startCh }, { line, ch: endCh });
 
         const baseOffset = editor.posToOffset({ line, ch: startCh });
@@ -270,6 +280,77 @@ export class SnippetManager {
         this.logger.debug("manager", `🔁 Cycled choice at tab stop $${stop.index}: "${nextValue}"`);
 
         return true;
+    }
+
+    private applyVariablesToText(
+        text: string,
+        tabStops: TabStopInfo[],
+        variables: SnippetVariableInfo[] | undefined,
+        editor: Editor
+    ): { text: string; tabStops: TabStopInfo[] } {
+        if (!variables || variables.length === 0) {
+            return { text, tabStops };
+        }
+
+        let currentText = text;
+        const updatedStops = tabStops.map((stop) => ({ ...stop }));
+        const sortedVariables = [...variables].sort(
+            (a, b) => a.start - b.start
+        );
+
+        let delta = 0;
+        for (const variable of sortedVariables) {
+            const start = variable.start + delta;
+            const end = variable.end + delta;
+            const originalLength = end - start;
+
+            const resolution = resolveVariableValue(variable.name, {
+                app: this.app,
+                editor,
+            });
+
+            let replacement =
+                resolution.value ??
+                variable.defaultValue ??
+                "";
+
+            if (resolution.value === null) {
+                const reason = resolution.reason ?? "no data";
+                this.logger.debug(
+                    "manager",
+                    `[Variable] ${variable.name} missing: ${reason}`
+                );
+                const fallbackInfo = variable.defaultValue
+                    ? ` (fallback = "${variable.defaultValue}")`
+                    : "";
+                new Notice(
+                    `Snippet variable ${variable.name} has no value: ${reason}${fallbackInfo}`,
+                    4000
+                );
+            }
+
+            currentText =
+                currentText.slice(0, start) +
+                replacement +
+                currentText.slice(end);
+
+            const diff = replacement.length - originalLength;
+            if (diff !== 0) {
+                updatedStops.forEach((stop) => {
+                    if (stop.start >= end) {
+                        stop.start += diff;
+                        stop.end += diff;
+                    } else if (stop.start >= start && stop.start < end) {
+                        stop.end += diff;
+                    } else if (stop.end > start && stop.end <= end) {
+                        stop.end += diff;
+                    }
+                });
+                delta += diff;
+            }
+        }
+
+        return { text: currentText, tabStops: updatedStops };
     }
 
     private focusStopByOffset(editor: Editor, stop: SnippetSessionStop): void {
