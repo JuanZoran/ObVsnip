@@ -175,14 +175,19 @@ export class SnippetCompletionMenu {
 			return this.applySort([...snippets], normalized, true);
 		}
 
-		const filtered = snippets.filter(
+		const prefixMatches = snippets.filter((snippet) =>
+			snippet.prefix.toLowerCase().startsWith(normalized)
+		);
+		const descriptionMatches = snippets.filter(
 			(snippet) =>
-				snippet.prefix.toLowerCase().includes(normalized) ||
-				(snippet.description?.toLowerCase().includes(normalized) ??
-					false)
+				!snippet.prefix.toLowerCase().includes(normalized) &&
+				(snippet.description?.toLowerCase().includes(normalized) ?? false)
 		);
 
-		return this.applySort(filtered, normalized, false);
+		return [
+			...this.applySort(prefixMatches, normalized, false),
+			...this.applySort(descriptionMatches, normalized, false),
+		];
 	}
 
 	private applySort(
@@ -600,7 +605,12 @@ export class SnippetCompletionMenu {
 			return false;
 		}
 
-		this.entries = allSnippets;
+		const normalized = query.trim().toLowerCase();
+		this.entries = this.applySort(
+			[...allSnippets],
+			normalized,
+			normalized.length === 0
+		);
 		this.emptyStateMessage = query
 			? `No snippets match "${query}". Showing all snippets.`
 			: null;
