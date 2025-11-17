@@ -96,6 +96,26 @@ class NextTabStopWidget extends WidgetType {
 	}
 }
 
+class ChoiceHintWidget extends WidgetType {
+	constructor(private readonly hint: string, private readonly color?: string) {
+		super();
+	}
+
+	toDOM(): HTMLElement {
+		const span = document.createElement('span');
+		span.className = 'snippet-choice-hint';
+		if (this.color) {
+			span.style.color = this.color;
+		}
+		span.textContent = this.hint;
+		return span;
+	}
+
+	ignoreEvent(): boolean {
+		return true;
+	}
+}
+
 const buildDecorations = (state: EditorState): DecorationSet => {
 	if (!widgetConfig.enabled) {
 		return Decoration.none;
@@ -152,6 +172,18 @@ const buildDecorations = (state: EditorState): DecorationSet => {
 				attributes,
 			}),
 		});
+
+		if (isActive && stop.choices && stop.choices.length > 0) {
+			const hintWidget = Decoration.widget({
+				side: 1,
+				widget: new ChoiceHintWidget('↺', widgetConfig.color),
+			});
+			pending.push({
+				from: stop.end,
+				to: stop.end,
+				deco: hintWidget,
+			});
+		}
 	}
 
 	let nextStop =

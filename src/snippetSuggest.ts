@@ -31,6 +31,8 @@ export class SnippetCompletionMenu {
 
 	private previewBodyEl: HTMLElement | null = null;
 
+	private previewStopsEl: HTMLElement | null = null;
+
 	private entries: ParsedSnippet[] = [];
 
 	private activeIndex = 0;
@@ -47,8 +49,10 @@ export class SnippetCompletionMenu {
 
 	private anchorCoords: { top: number; left: number } | null = null;
 
-	private initialSelection: { from: EditorPosition; to: EditorPosition } | null =
-		null;
+	private initialSelection: {
+		from: EditorPosition;
+		to: EditorPosition;
+	} | null = null;
 
 	private hadInitialSelection = false;
 
@@ -72,7 +76,10 @@ export class SnippetCompletionMenu {
 		const targetEditor = editor ?? getActiveEditor(this.app);
 
 		if (!targetEditor) {
-			this.options.logger.debug("menu", "[SnippetMenu] open: no active editor");
+			this.options.logger.debug(
+				"menu",
+				"[SnippetMenu] open: no active editor"
+			);
 
 			return false;
 		}
@@ -86,33 +93,33 @@ export class SnippetCompletionMenu {
 		this.currentQuery = initialQuery ?? "";
 		this.setQueryAnchor(targetEditor);
 
-			const hasEntries = this.updateEntriesForQuery(this.currentQuery);
+		const hasEntries = this.updateEntriesForQuery(this.currentQuery);
 
 		if (!hasEntries) {
-				this.options.logger.debug(
-					"menu",
-					"[SnippetMenu] open: no snippets match query"
-				);
+			this.options.logger.debug(
+				"menu",
+				"[SnippetMenu] open: no snippets match query"
+			);
 
 			return false;
 		}
 
-			const coords = this.getCursorCoords(targetEditor);
-			this.anchorCoords = coords;
+		const coords = this.getCursorCoords(targetEditor);
+		this.anchorCoords = coords;
 
-			this.render(coords);
+		this.render(coords);
 
-			this.selectIndex(0);
+		this.selectIndex(0);
 
-			window.addEventListener("keydown", this.boundKeydown, true);
+		window.addEventListener("keydown", this.boundKeydown, true);
 
 		window.addEventListener("mousedown", this.boundClick, true);
 		window.addEventListener("scroll", this.boundReposition, true);
 		window.addEventListener("resize", this.boundReposition, true);
 		window.addEventListener("pointermove", this.boundPointerMove, true);
 
-			return true;
-		}
+		return true;
+	}
 
 	close(): void {
 		if (this.container?.parentElement) {
@@ -181,7 +188,8 @@ export class SnippetCompletionMenu {
 		const descriptionMatches = snippets.filter(
 			(snippet) =>
 				!snippet.prefix.toLowerCase().includes(normalized) &&
-				(snippet.description?.toLowerCase().includes(normalized) ?? false)
+				(snippet.description?.toLowerCase().includes(normalized) ??
+					false)
 		);
 
 		return [
@@ -242,10 +250,7 @@ export class SnippetCompletionMenu {
 		});
 	}
 
-	private getSmartPriority(
-		snippet: ParsedSnippet,
-		query: string
-	): number {
+	private getSmartPriority(snippet: ParsedSnippet, query: string): number {
 		const prefixLower = snippet.prefix.toLowerCase();
 		if (prefixLower === query) return 0;
 		if (prefixLower.startsWith(query)) return 1;
@@ -280,17 +285,24 @@ export class SnippetCompletionMenu {
 
 		this.previewDescEl = preview.createDiv({ cls: "snippet-preview-desc" });
 
-			this.previewBodyEl = preview.createEl("pre", {
-				cls: "snippet-preview-body",
-			});
+		this.previewStopsEl = preview.createDiv({
+			cls: "snippet-preview-stops",
+		});
 
-			document.body.appendChild(container);
+		this.previewBodyEl = preview.createEl("pre", {
+			cls: "snippet-preview-body",
+		});
 
-			this.container = container;
-			this.positionContainer(coords);
+		document.body.appendChild(container);
+
+		this.container = container;
+		this.positionContainer(coords);
 	}
 
-	private selectIndex(index: number, options?: { preventScroll?: boolean }): void {
+	private selectIndex(
+		index: number,
+		options?: { preventScroll?: boolean }
+	): void {
 		if (!this.listEl || this.entries.length === 0) return;
 
 		if (index < 0) index = this.entries.length - 1;
@@ -300,7 +312,9 @@ export class SnippetCompletionMenu {
 		this.activeIndex = index;
 
 		const items = Array.from(
-			this.listEl.querySelectorAll<HTMLElement>(".snippet-completion-item")
+			this.listEl.querySelectorAll<HTMLElement>(
+				".snippet-completion-item"
+			)
 		);
 
 		items.forEach((item, idx) =>
@@ -326,9 +340,16 @@ export class SnippetCompletionMenu {
 
 		this.previewDescEl.toggleClass("is-hidden", !snippet.description);
 
-		const previewBody = snippet.processedText ?? snippet.body;
+		const rawBody = snippet.body ?? snippet.processedText ?? "";
 
-		this.previewBodyEl.textContent = previewBody;
+		this.previewBodyEl.textContent = rawBody;
+
+		if (this.previewStopsEl) {
+			const stops = (snippet.tabStops ?? []).map((stop) => `$${stop.index}`);
+			this.previewStopsEl.textContent =
+				stops.length > 0 ? `Tab stops: ${stops.join(", ")}` : "";
+			this.previewStopsEl.toggleClass("is-hidden", stops.length === 0);
+		}
 	}
 
 	private handleKeydown(event: KeyboardEvent): void {
@@ -414,7 +435,10 @@ export class SnippetCompletionMenu {
 			this.currentEditor
 		);
 
-		this.currentEditor.setSelection(replacementRange.from, replacementRange.to);
+		this.currentEditor.setSelection(
+			replacementRange.from,
+			replacementRange.to
+		);
 
 		this.options.logger.debug(
 			"menu",
@@ -459,7 +483,8 @@ export class SnippetCompletionMenu {
 
 		const prefix = line.slice(0, cursor.ch);
 
-		const match = prefix.match(/(\S+)$/);
+		const asciiMatch = prefix.match(/([a-zA-Z0-9_]+)$/);
+		const match = asciiMatch ?? prefix.match(/(\S+)$/);
 
 		return match?.[0] ?? "";
 	}
@@ -569,7 +594,10 @@ export class SnippetCompletionMenu {
 		};
 	}
 
-	private findPrefixOverlapLength(snippet: ParsedSnippet, editor: Editor): number {
+	private findPrefixOverlapLength(
+		snippet: ParsedSnippet,
+		editor: Editor
+	): number {
 		const cursor = editor.getCursor();
 		const lineText = editor.getLine(cursor.line) ?? "";
 		const beforeCursor = lineText.slice(0, cursor.ch);

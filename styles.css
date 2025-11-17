@@ -27,6 +27,14 @@ If your plugin does not need CSS, delete this file.
 	white-space: nowrap;
 }
 
+.snippet-choice-hint {
+	margin-left: 0.25em;
+	opacity: 0.7;
+	font-size: 0.85em;
+	pointer-events: none;
+	color: var(--snippet-ghost-text-color, var(--text-muted));
+}
+
 .snippet-completion-menu {
 	position: fixed;
 	z-index: 1000;
@@ -81,6 +89,12 @@ If your plugin does not need CSS, delete this file.
 
 .snippet-preview-desc.is-hidden {
 	display: none;
+}
+
+.snippet-preview-stops {
+	font-size: 0.75em;
+	color: var(--text-faint);
+	margin-bottom: 4px;
 }
 
 .snippet-preview-body {

@@ -355,7 +355,8 @@ export default class TextSnippetsPlugin extends Plugin {
 		const cursor = editor.getCursor();
 		const line = editor.getLine(cursor.line) ?? "";
 		const prefix = line.slice(0, cursor.ch);
-		const match = prefix.match(/(\S+)$/);
+		const asciiMatch = prefix.match(/([a-zA-Z0-9_]+)$/);
+		const match = asciiMatch ?? prefix.match(/(\S+)$/);
 		return match?.[0] ?? "";
 	}
 
