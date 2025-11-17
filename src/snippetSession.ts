@@ -113,6 +113,7 @@ const buildDecorations = (state: EditorState): DecorationSet => {
 
 	const builder = new RangeSetBuilder<Decoration>();
 	const selection = state.selection.main;
+	const pending: Array<{ from: number; to: number; deco: Decoration }> = [];
 
 	for (const stop of session.stops) {
 		if (stop.index === 0) {
@@ -143,14 +144,14 @@ const buildDecorations = (state: EditorState): DecorationSet => {
 		const className = isActive ? 'cm-snippet-placeholder-active' : 'cm-snippet-placeholder';
 		const attributes = widgetConfig.color ? { style: `--snippet-placeholder-color: ${widgetConfig.color}` } : undefined;
 
-		builder.add(
-			stop.start,
-			stop.end,
-			Decoration.mark({
+		pending.push({
+			from: stop.start,
+			to: stop.end,
+			deco: Decoration.mark({
 				class: className,
 				attributes,
 			}),
-		);
+		});
 	}
 
 	let nextStop =
@@ -164,8 +165,20 @@ const buildDecorations = (state: EditorState): DecorationSet => {
 			side: 1,
 			widget: new NextTabStopWidget(nextStop.label ?? `$${nextStop.index}`, widgetConfig.color),
 		});
-		builder.add(nextStop.end, nextStop.end, widget);
+		pending.push({
+			from: nextStop.end,
+			to: nextStop.end,
+			deco: widget,
+		});
 	}
+
+	pending
+		.sort((a, b) => {
+			if (a.from !== b.from) return a.from - b.from;
+			if (a.to !== b.to) return a.to - b.to;
+			return 0;
+		})
+		.forEach((entry) => builder.add(entry.from, entry.to, entry.deco));
 
 	return builder.finish();
 };
