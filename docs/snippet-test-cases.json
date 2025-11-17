@@ -1,0 +1,44 @@
+[
+  {
+    "name": "Sequential placeholders",
+    "prefix": "seq",
+    "body": "begin $1 middle $2 end",
+    "description": "Verify Tab visits $1 then $2 before exiting without an explicit $0."
+  },
+  {
+    "name": "Implicit $0",
+    "prefix": "implicit0",
+    "body": "result $1",
+    "description": "Ensure the auto-added $0 immediately ends the session after $1."
+  },
+  {
+    "name": "Zero-length final placeholder",
+    "prefix": "zero",
+    "body": "value ${1:selected}",
+    "description": "Confirm hitting the final zero-length placeholder exits instantly."
+  },
+  {
+    "name": "Snippet ending with $0",
+    "prefix": "ends0",
+    "body": "/* comment */$0",
+    "description": "Expansion should be treated as the first jump and exit right away."
+  },
+  {
+    "name": "Selection overlaps $0",
+    "prefix": "overlap",
+    "body": "start $1 end",
+    "description": "When a selection already covers the implicit $0, Tab must exit immediately."
+  },
+  {
+    "name": "Choice placeholder",
+    "prefix": "loop",
+    "body": "${1|a,b|} tail",
+    "description": "Cycle the choice and then leave via $0 to validate choice handling."
+  },
+  {
+    "name": "Nested snippet (if supported)",
+    "prefix": "embed",
+    "body": "outer ${1:inner snippet$0}",
+    "description": "Check state restoration when exiting an inner snippet back to the caller."
+  }
+]

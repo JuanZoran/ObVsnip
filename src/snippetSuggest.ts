@@ -495,6 +495,10 @@ export class SnippetCompletionMenu {
 	): { from: EditorPosition; to: EditorPosition } {
 		const cursor = editor.getCursor();
 
+		if (this.emptyStateMessage) {
+			return { from: cursor, to: cursor };
+		}
+
 		if (this.initialSelection && this.hadInitialSelection) {
 			return {
 				from: this.initialSelection.from,
