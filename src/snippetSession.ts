@@ -1,0 +1,199 @@
+import { ChangeDesc, EditorState, Extension, RangeSetBuilder, StateEffect, StateField } from '@codemirror/state';
+import { Decoration, DecorationSet, EditorView, ViewPlugin, ViewUpdate, WidgetType } from '@codemirror/view';
+
+export interface SnippetWidgetConfig {
+	enabled: boolean;
+	color: string;
+}
+
+export interface SnippetSessionStop {
+	index: number;
+	start: number;
+	end: number;
+	label?: string;
+}
+
+export interface SnippetSessionEntry {
+	currentIndex: number;
+	stops: SnippetSessionStop[];
+}
+
+type SnippetSessionStack = SnippetSessionEntry[];
+
+const DEFAULT_WIDGET_CONFIG: SnippetWidgetConfig = {
+	enabled: true,
+	color: '',
+};
+
+let widgetConfig: SnippetWidgetConfig = { ...DEFAULT_WIDGET_CONFIG };
+
+const mapStops = (stops: SnippetSessionStop[], change: ChangeDesc): SnippetSessionStop[] =>
+	stops.map(stop => ({
+		...stop,
+		start: change.mapPos(stop.start, -1),
+		end: change.mapPos(stop.end, 1),
+	}));
+
+const mapStack = (stack: SnippetSessionStack, change: ChangeDesc): SnippetSessionStack =>
+	stack.map(entry => ({
+		...entry,
+		stops: mapStops(entry.stops, change),
+	}));
+
+export const pushSnippetSessionEffect = StateEffect.define<SnippetSessionEntry>();
+export const popSnippetSessionEffect = StateEffect.define<void>();
+export const updateSnippetSessionEffect = StateEffect.define<{ currentIndex: number }>();
+export const clearSnippetSessionsEffect = StateEffect.define<void>();
+
+export const snippetSessionField = StateField.define<SnippetSessionStack>({
+	create: () => [],
+	update(value, tr) {
+		let current = value;
+
+		if (tr.docChanged) {
+			current = mapStack(current, tr.changes);
+		}
+
+		for (const effect of tr.effects) {
+			if (effect.is(pushSnippetSessionEffect)) {
+				current = [...current, effect.value];
+			} else if (effect.is(popSnippetSessionEffect)) {
+				current = current.slice(0, -1);
+			} else if (effect.is(updateSnippetSessionEffect)) {
+				if (current.length === 0) continue;
+				const updated = current[current.length - 1];
+				current = [
+					...current.slice(0, -1),
+					{ ...updated, currentIndex: effect.value.currentIndex },
+				];
+			} else if (effect.is(clearSnippetSessionsEffect)) {
+				current = [];
+			}
+		}
+
+		return current;
+	},
+});
+
+class NextTabStopWidget extends WidgetType {
+	constructor(private readonly label: string, private readonly color?: string) {
+		super();
+	}
+
+	toDOM(): HTMLElement {
+		const span = document.createElement('span');
+		span.className = 'snippet-next-placeholder';
+		if (this.color) {
+			span.style.color = this.color;
+		}
+		span.textContent = this.label;
+		return span;
+	}
+
+	ignoreEvent(): boolean {
+		return true;
+	}
+}
+
+const buildDecorations = (state: EditorState): DecorationSet => {
+	if (!widgetConfig.enabled) {
+		return Decoration.none;
+	}
+
+	const stack = state.field(snippetSessionField);
+	if (stack.length === 0) {
+		return Decoration.none;
+	}
+
+	const session = stack[stack.length - 1];
+	if (session.currentIndex < 0) {
+		return Decoration.none;
+	}
+
+	const builder = new RangeSetBuilder<Decoration>();
+	const selection = state.selection.main;
+
+	for (const stop of session.stops) {
+		if (stop.index === 0) {
+			continue;
+		}
+
+		if (stop.index < session.currentIndex) {
+			continue;
+		}
+
+		const isActive = stop.index === session.currentIndex;
+
+		if (stop.start === stop.end && !isActive) {
+			continue;
+		}
+
+		if (
+			isActive &&
+			(selection.from !== stop.start || selection.to !== stop.end)
+		) {
+			continue;
+		}
+
+		if (stop.start === stop.end) {
+			continue;
+		}
+
+		const className = isActive ? 'cm-snippet-placeholder-active' : 'cm-snippet-placeholder';
+		const attributes = widgetConfig.color ? { style: `--snippet-placeholder-color: ${widgetConfig.color}` } : undefined;
+
+		builder.add(
+			stop.start,
+			stop.end,
+			Decoration.mark({
+				class: className,
+				attributes,
+			}),
+		);
+	}
+
+	let nextStop =
+		session.stops.find((stop: SnippetSessionStop) => stop.index === session.currentIndex + 1) ??
+		(session.currentIndex !== 0
+			? session.stops.find((stop: SnippetSessionStop) => stop.index === 0)
+			: undefined);
+
+	if (nextStop) {
+		const widget = Decoration.widget({
+			side: 1,
+			widget: new NextTabStopWidget(nextStop.label ?? `$${nextStop.index}`, widgetConfig.color),
+		});
+		builder.add(nextStop.end, nextStop.end, widget);
+	}
+
+	return builder.finish();
+};
+
+export const snippetSessionPlugin = ViewPlugin.fromClass(
+	class {
+		decorations: DecorationSet;
+
+		constructor(view: EditorView) {
+			this.decorations = buildDecorations(view.state);
+		}
+
+		update(update: ViewUpdate) {
+			if (
+				update.docChanged ||
+				update.selectionSet ||
+				update.startState.field(snippetSessionField) !== update.state.field(snippetSessionField)
+			) {
+				this.decorations = buildDecorations(update.state);
+			}
+		}
+	},
+	{
+		decorations: value => value.decorations,
+	},
+);
+
+export const snippetSessionExtensions: Extension[] = [snippetSessionField, snippetSessionPlugin];
+
+export const setSnippetWidgetConfig = (config: Partial<SnippetWidgetConfig>): void => {
+	widgetConfig = { ...widgetConfig, ...config };
+};
