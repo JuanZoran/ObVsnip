@@ -46,6 +46,10 @@ If your plugin does not need CSS, delete this file.
 
 .snippet-choice-entry {
 	margin: 0 1px;
+	color: var(
+		--snippet-choice-inactive-color,
+		var(--snippet-choice-active-color, var(--snippet-ghost-text-color, var(--text-muted)))
+	);
 }
 
 .snippet-choice-entry-active {

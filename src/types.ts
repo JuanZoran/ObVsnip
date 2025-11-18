@@ -65,8 +65,13 @@ export interface SnippetMenuKeymap {
 	toggle: string;
 }
 
-export interface WidgetHighlightConfig {
-	choiceColor?: string;
+export interface SnippetWidgetConfig {
+	enabled: boolean;
+	placeholderColor: string;
+	placeholderActiveColor: string;
+	ghostTextColor: string;
+	choiceActiveColor: string;
+	choiceInactiveColor: string;
 }
 
 export type RankingAlgorithmId =

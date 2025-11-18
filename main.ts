@@ -42,6 +42,9 @@ interface PluginSettings {
 	rankingAlgorithms: RankingAlgorithmSetting[];
 	snippetUsage: Record<string, number>;
 	choiceHighlightColor: string;
+	choiceInactiveColor: string;
+	placeholderActiveColor: string;
+	ghostTextColor: string;
 }
 
 const DEFAULT_SETTINGS: PluginSettings = {
@@ -62,6 +65,9 @@ const DEFAULT_SETTINGS: PluginSettings = {
 	})),
 	snippetUsage: {},
 	choiceHighlightColor: "#5690ff",
+	choiceInactiveColor: "#4dabff",
+	placeholderActiveColor: "rgba(86, 156, 214, 0.35)",
+	ghostTextColor: "var(--text-muted)",
 };
 
 export default class TextSnippetsPlugin extends Plugin {
@@ -178,6 +184,17 @@ export default class TextSnippetsPlugin extends Plugin {
 		}
 		if (!this.settings.choiceHighlightColor) {
 			this.settings.choiceHighlightColor = DEFAULT_SETTINGS.choiceHighlightColor;
+		}
+		if (!this.settings.choiceInactiveColor) {
+			this.settings.choiceInactiveColor =
+				DEFAULT_SETTINGS.choiceInactiveColor;
+		}
+		if (!this.settings.placeholderActiveColor) {
+			this.settings.placeholderActiveColor =
+				DEFAULT_SETTINGS.placeholderActiveColor;
+		}
+		if (!this.settings.ghostTextColor) {
+			this.settings.ghostTextColor = DEFAULT_SETTINGS.ghostTextColor;
 		}
 		this.settings.rankingAlgorithms = normalizeRankingAlgorithms(
 			this.settings.rankingAlgorithms
@@ -433,8 +450,11 @@ export default class TextSnippetsPlugin extends Plugin {
 		this.logger.setCategories(this.settings.debugCategories);
 		setSnippetWidgetConfig({
 			enabled: this.settings.showVirtualText,
-			color: this.settings.virtualTextColor,
-			choiceColor: this.settings.choiceHighlightColor,
+			placeholderColor: this.settings.virtualTextColor,
+			placeholderActiveColor: this.settings.placeholderActiveColor,
+			ghostTextColor: this.settings.ghostTextColor,
+			choiceActiveColor: this.settings.choiceHighlightColor,
+			choiceInactiveColor: this.settings.choiceInactiveColor,
 		});
 		this.reconfigureTriggerKeymap();
 	}

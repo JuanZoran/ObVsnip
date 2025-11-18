@@ -119,6 +119,15 @@ const translations: Record<LocaleKey, LocaleStrings> = {
 			choiceHighlightName: "Choice highlight color",
 			choiceHighlightDesc:
 				"Override the color used to emphasize the currently selected choice caption.",
+			choiceInactiveName: "Choice inactive color",
+			choiceInactiveDesc:
+				"Color for all other choices so you can see the contrast.",
+			placeholderActiveName: "Active placeholder color",
+			placeholderActiveDesc:
+				"Customize the highlight for the currently active placeholder.",
+			ghostTextName: "Ghost text color",
+			ghostTextDesc:
+				"Control the color of ghost tags like the next tab stop indicator.",
 			debugSection: "🛠️ Debugging",
 			debugName: "Enable debug mode",
 			debugDesc: "Print diagnostic information to the developer console.",
@@ -213,6 +222,12 @@ const translations: Record<LocaleKey, LocaleStrings> = {
 			choiceHighlightName: "选择高亮颜色",
 			choiceHighlightDesc:
 				"设置强调当前选择项的颜色，方便在文本中快速识别。",
+			choiceInactiveName: "非选中项颜色",
+			choiceInactiveDesc: "未选中的 choice 使用此颜色显示。",
+			placeholderActiveName: "活动占位符颜色",
+			placeholderActiveDesc: "自定义当前占位符的高亮色。",
+			ghostTextName: "幽灵文本颜色",
+			ghostTextDesc: "控制下一步/跳转提示等幽灵文本的颜色。",
 			debugSection: "🛠️ 调试",
 			debugName: "开启调试模式",
 			debugDesc: "在开发者控制台输出诊断信息。",

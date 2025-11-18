@@ -195,20 +195,50 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 					})
 			);
 
-		new Setting(containerEl)
-			.setName(strings.choiceHighlightName)
-			.setDesc(strings.choiceHighlightDesc)
-			.addText((text) => {
-				text
-					.setPlaceholder("Highlight color")
-					.setValue(this.plugin.settings.choiceHighlightColor)
-					.onChange(async (value) => {
-						this.plugin.settings.choiceHighlightColor = value || "";
-						await this.plugin.saveSettings();
-						this.plugin.applyRuntimeSettings();
-					});
-				text.inputEl.setAttribute("type", "color");
-			});
+		this.addColorSetting(
+			containerEl,
+			strings.choiceHighlightName,
+			strings.choiceHighlightDesc,
+			this.plugin.settings.choiceHighlightColor,
+			async (value) => {
+				this.plugin.settings.choiceHighlightColor = value || "";
+				await this.plugin.saveSettings();
+				this.plugin.applyRuntimeSettings();
+			}
+		);
+		this.addColorSetting(
+			containerEl,
+			strings.choiceInactiveName,
+			strings.choiceInactiveDesc,
+			this.plugin.settings.choiceInactiveColor,
+			async (value) => {
+				this.plugin.settings.choiceInactiveColor = value || "";
+				await this.plugin.saveSettings();
+				this.plugin.applyRuntimeSettings();
+			}
+		);
+		this.addColorSetting(
+			containerEl,
+			strings.placeholderActiveName,
+			strings.placeholderActiveDesc,
+			this.plugin.settings.placeholderActiveColor,
+			async (value) => {
+				this.plugin.settings.placeholderActiveColor = value || "";
+				await this.plugin.saveSettings();
+				this.plugin.applyRuntimeSettings();
+			}
+		);
+		this.addColorSetting(
+			containerEl,
+			strings.ghostTextName,
+			strings.ghostTextDesc,
+			this.plugin.settings.ghostTextColor,
+			async (value) => {
+				this.plugin.settings.ghostTextColor = value || "";
+				await this.plugin.saveSettings();
+				this.plugin.applyRuntimeSettings();
+			}
+		);
 
 		containerEl.createEl("h3", { text: strings.debugSection });
 
@@ -576,6 +606,25 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 		await this.plugin.saveSettings();
 		await this.plugin.loadSnippetsFromFiles();
 		this.display();
+	}
+
+	private addColorSetting(
+		containerEl: HTMLElement,
+		name: string,
+		desc: string,
+		value: string,
+		onChange: (value: string) => Promise<void>
+	): void {
+		new Setting(containerEl)
+			.setName(name)
+			.setDesc(desc)
+			.addText((text) => {
+				text
+					.setPlaceholder("#000000")
+					.setValue(value)
+					.onChange(onChange);
+				text.inputEl.setAttribute("type", "color");
+			});
 	}
 
 	private async handleReloadSnippets(): Promise<void> {

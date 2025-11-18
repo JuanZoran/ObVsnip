@@ -103,7 +103,8 @@ export class ChoiceHintWidget extends WidgetType {
 		private readonly hint: string,
 		private readonly choices: string[],
 		private readonly activeChoice?: string,
-		private readonly highlightColor?: string
+		private readonly highlightColor?: string,
+		private readonly inactiveColor?: string
 	) {
 		super();
 	}
@@ -115,6 +116,12 @@ export class ChoiceHintWidget extends WidgetType {
 			wrapper.style.setProperty(
 				"--snippet-choice-active-color",
 				this.highlightColor
+			);
+		}
+		if (this.inactiveColor) {
+			wrapper.style.setProperty(
+				"--snippet-choice-inactive-color",
+				this.inactiveColor
 			);
 		}
 
@@ -194,7 +201,36 @@ const buildDecorations = (state: EditorState): DecorationSet => {
 		}
 
 		const className = isActive ? 'cm-snippet-placeholder-active' : 'cm-snippet-placeholder';
-		const attributes = widgetConfig.color ? { style: `--snippet-placeholder-color: ${widgetConfig.color}` } : undefined;
+		const styleParts: string[] = [];
+		if (widgetConfig.placeholderColor) {
+			styleParts.push(
+				`--snippet-placeholder-color: ${widgetConfig.placeholderColor}`
+			);
+		}
+		if (widgetConfig.placeholderActiveColor) {
+			styleParts.push(
+				`--snippet-placeholder-active-color: ${widgetConfig.placeholderActiveColor}`
+			);
+		}
+		if (widgetConfig.ghostTextColor) {
+			styleParts.push(
+				`--snippet-ghost-text-color: ${widgetConfig.ghostTextColor}`
+			);
+		}
+		if (widgetConfig.choiceActiveColor) {
+			styleParts.push(
+				`--snippet-choice-active-color: ${widgetConfig.choiceActiveColor}`
+			);
+		}
+		if (widgetConfig.choiceInactiveColor) {
+			styleParts.push(
+				`--snippet-choice-inactive-color: ${widgetConfig.choiceInactiveColor}`
+			);
+		}
+		const attributes =
+			styleParts.length > 0
+				? { style: styleParts.join(";") }
+				: undefined;
 
 		pending.push({
 			from: stop.start,
@@ -213,9 +249,8 @@ const buildDecorations = (state: EditorState): DecorationSet => {
 						'⚙️',
 						stop.choices,
 						activeChoice,
-						widgetConfig.choiceColor ??
-							widgetConfig.color ??
-							undefined
+						widgetConfig.choiceActiveColor,
+						widgetConfig.choiceInactiveColor
 					),
 				});
 				pending.push({
@@ -233,10 +268,13 @@ const buildDecorations = (state: EditorState): DecorationSet => {
 			: undefined);
 
 	if (nextStop) {
-		const widget = Decoration.widget({
-			side: 1,
-			widget: new NextTabStopWidget(nextStop.label ?? `$${nextStop.index}`, widgetConfig.color),
-		});
+	const widget = Decoration.widget({
+		side: 1,
+		widget: new NextTabStopWidget(
+			nextStop.label ?? `$${nextStop.index}`,
+			widgetConfig.ghostTextColor ?? widgetConfig.placeholderActiveColor
+		),
+	});
 		pending.push({
 			from: nextStop.end,
 			to: nextStop.end,
