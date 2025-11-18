@@ -1,6 +1,7 @@
 import { TextSnippetsSettingsTab } from "../src/settingsTab";
 import { getLocaleStrings } from "../src/i18n";
 import { DEFAULT_RANKING_ALGORITHMS } from "../src/rankingConfig";
+import type { ParsedSnippet } from "../src/types";
 import type TextSnippetsPlugin from "../main";
 
 const DOM_HELPERS = [
@@ -90,6 +91,15 @@ const createPluginMock = (
 	saveSettings: jest.Mock;
 	applyRuntimeSettings: jest.Mock;
 	getSnippetLoader: TextSnippetsPlugin["getSnippetLoader"];
+	getVirtualTextColorPresets: TextSnippetsPlugin["getVirtualTextColorPresets"];
+	saveVirtualTextColorPreset: TextSnippetsPlugin["saveVirtualTextColorPreset"];
+	applyVirtualTextColorPreset: TextSnippetsPlugin["applyVirtualTextColorPreset"];
+	resetVirtualTextColorsToDefaults: TextSnippetsPlugin["resetVirtualTextColorsToDefaults"];
+	previewVirtualTextInEditor: TextSnippetsPlugin["previewVirtualTextInEditor"];
+	getSelectedVirtualTextPresetName: TextSnippetsPlugin["getSelectedVirtualTextPresetName"];
+	getAvailableSnippets: TextSnippetsPlugin["getAvailableSnippets"];
+	getSnippetUsageCounts: TextSnippetsPlugin["getSnippetUsageCounts"];
+	getRankingAlgorithmNames: TextSnippetsPlugin["getRankingAlgorithmNames"];
 } => {
 	const settings: TextSnippetsPlugin["settings"] = {
 		snippetFiles: [],
@@ -108,6 +118,12 @@ const createPluginMock = (
 			...entry,
 		})),
 		snippetUsage: {},
+		choiceHighlightColor: "#5690ff",
+		choiceInactiveColor: "#4dabff",
+		placeholderActiveColor: "rgba(86, 156, 214, 0.35)",
+		ghostTextColor: "var(--text-muted)",
+		virtualTextPresets: [],
+		selectedVirtualTextPresetName: "",
 	};
 	return {
 		settings,
@@ -117,6 +133,17 @@ const createPluginMock = (
 		getSnippetLoader: () => ({
 			getTextFiles: () => [],
 		}) as any,
+		getVirtualTextColorPresets: jest.fn().mockReturnValue([]),
+		saveVirtualTextColorPreset: jest.fn(),
+		applyVirtualTextColorPreset: jest.fn(),
+		resetVirtualTextColorsToDefaults: jest.fn(),
+		previewVirtualTextInEditor: jest.fn().mockReturnValue(true),
+		getSelectedVirtualTextPresetName: jest.fn().mockReturnValue(""),
+		getAvailableSnippets: jest.fn().mockReturnValue([]),
+		getSnippetUsageCounts: jest.fn().mockReturnValue(new Map()),
+		getRankingAlgorithmNames: jest
+			.fn()
+			.mockReturnValue(getLocaleStrings("en").settings.rankingAlgorithmNames),
 	};
 };
 
@@ -168,4 +195,88 @@ describe("TextSnippetsSettingsTab debug area", () => {
 		const tab = createTab(pluginMock);
 		expect(() => tab["showVariableHelp"]()).not.toThrow();
 	});
+});
+
+describe("TextSnippetsSettingsTab color presets", () => {
+	const restoreDomHelpers = ensureDomHelpers();
+
+	afterEach(() => {
+		document.body.innerHTML = "";
+		jest.clearAllMocks();
+	});
+
+	afterAll(() => {
+		restoreDomHelpers();
+	});
+
+	it("saves a named color scheme and clears the input", async () => {
+		const pluginMock = createPluginMock(false) as unknown as TextSnippetsPlugin;
+		const tab = createTab(pluginMock);
+		tab.display = jest.fn();
+		tab["updateVirtualPreviewStyles"] = jest.fn();
+
+		tab["newColorSchemeName"] = "cool";
+		await tab["handleSaveColorScheme"]();
+
+		expect(pluginMock.saveVirtualTextColorPreset).toHaveBeenCalledWith({
+			name: "cool",
+			placeholderColor: pluginMock.settings.virtualTextColor,
+			placeholderActiveColor: pluginMock.settings.placeholderActiveColor,
+			ghostTextColor: pluginMock.settings.ghostTextColor,
+			choiceActiveColor: pluginMock.settings.choiceHighlightColor,
+			choiceInactiveColor: pluginMock.settings.choiceInactiveColor,
+		});
+		expect(pluginMock.saveSettings).toHaveBeenCalled();
+		expect(tab["newColorSchemeName"]).toBe("");
+		expect(tab["selectedColorPresetName"]).toBe("cool");
+		expect(tab.display).toHaveBeenCalled();
+	});
+
+	it("renders ranking preview entries showing usage", () => {
+		const pluginMock = createPluginMock(false) as unknown as TextSnippetsPlugin;
+		const snippets: ParsedSnippet[] = [
+			{
+				prefix: "alpha",
+				body: "alpha",
+				processedText: "alpha",
+				tabStops: [],
+				description: "Alpha",
+			},
+			{
+				prefix: "beta",
+				body: "beta",
+				processedText: "beta",
+				tabStops: [],
+				description: "Beta",
+			},
+			{
+				prefix: "gamma",
+				body: "gamma",
+				processedText: "gamma",
+				tabStops: [],
+				description: "Gamma",
+			},
+		];
+		pluginMock.getAvailableSnippets = jest.fn().mockReturnValue(snippets);
+		pluginMock.getSnippetUsageCounts = jest.fn().mockReturnValue(
+			new Map<string, number>([
+				["alpha", 5],
+				["beta", 2],
+				["gamma", 1],
+			])
+		);
+
+		const tab = createTab(pluginMock);
+		const container = document.createElement("div");
+		tab["renderRankingPreview"](
+			container,
+			pluginMock.getStrings().settings
+		);
+
+		const entries = container.querySelectorAll(".ranking-preview-entry");
+		expect(entries.length).toBeGreaterThanOrEqual(1);
+		expect(container.textContent).toContain("alpha");
+		expect(container.textContent).toContain("Usage: 5");
+	});
+
 });

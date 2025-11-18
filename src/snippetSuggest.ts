@@ -4,6 +4,7 @@ import { rankSnippets } from "./snippetRankingPipeline";
 import type {
 	ParsedSnippet,
 	PrefixInfo,
+	RankingAlgorithmId,
 	RankingAlgorithmSetting,
 } from "./types";
 
@@ -13,6 +14,7 @@ import { PluginLogger } from "./logger";
 
 import { getActiveEditor, getEditorView } from "./editorUtils";
 import { getContextBeforeCursor } from "./prefixContext";
+import { getMonotonicTime } from "./telemetry";
 
 interface SnippetMenuOptions {
 	getSnippets: () => ParsedSnippet[];
@@ -24,6 +26,7 @@ interface SnippetMenuOptions {
 	getRankingAlgorithms: () => RankingAlgorithmSetting[];
 	getUsageCounts?: () => Map<string, number>;
 	getPrefixInfo?: () => PrefixInfo;
+	getRankingAlgorithmNames: () => Record<RankingAlgorithmId, string>;
 }
 
 const matchesFuzzy = (source: string, query: string): boolean => {
@@ -198,10 +201,13 @@ export class SnippetCompletionMenu {
 		return this.options.getSnippets().filter((snippet) => !snippet.hide);
 	}
 
-	private filterSnippets(query: string): ParsedSnippet[] {
+	private filterSnippets(
+		query: string,
+		candidates?: ParsedSnippet[]
+	): ParsedSnippet[] {
 		const normalized = query.trim().toLowerCase();
 
-		const snippets = this.getVisibleSnippets();
+		const snippets = candidates ?? this.getVisibleSnippets();
 
 		if (!normalized) {
 			return snippets;
@@ -389,6 +395,12 @@ export class SnippetCompletionMenu {
 		this.queryAnchorPos = context.range.from;
 
 		const hasEntries = this.updateEntriesForQuery(this.currentQuery);
+
+		const range = context.range;
+		this.options.logger.debug(
+			"menu",
+			`[Telemetry] refresh triggered query="${this.currentQuery}" range=${range.from.line}:${range.from.ch}-${range.to.line}:${range.to.ch} hasEntries=${hasEntries}`
+		);
 
 		if (!hasEntries) {
 			this.close();
@@ -711,29 +723,82 @@ export class SnippetCompletionMenu {
 	}
 
 	private updateEntriesForQuery(query: string): boolean {
-		const filtered = this.filterSnippets(query);
+		const visibleSnippets = this.getVisibleSnippets();
+		const totalSnippetCount = this.options.getSnippets().length;
+		const hiddenCount = Math.max(totalSnippetCount - visibleSnippets.length, 0);
+		const searchStart = getMonotonicTime();
+		const filtered = this.filterSnippets(query, visibleSnippets);
+		const searchDuration = getMonotonicTime() - searchStart;
 		const algorithms = this.options.getRankingAlgorithms();
 		const rankingContext = this.buildRankingContext(query);
 
 		if (filtered.length > 0) {
+			const rankingStart = getMonotonicTime();
 			this.entries = rankSnippets(filtered, algorithms, rankingContext);
+			const rankingDuration = getMonotonicTime() - rankingStart;
 			this.emptyStateMessage = null;
+			this.logQueryTelemetry({
+				query,
+				fallback: false,
+				entriesCount: this.entries.length,
+				filteredCount: filtered.length,
+				visibleCount: visibleSnippets.length,
+				hiddenCount,
+				searchDuration,
+				rankingDuration,
+				algorithms,
+			});
 			return true;
 		}
 
-		const visibleSnippets = this.getVisibleSnippets();
 		if (visibleSnippets.length === 0) {
 			this.entries = [];
 			this.emptyStateMessage = null;
 			return false;
 		}
 
+		const rankingStart = getMonotonicTime();
 		this.entries = rankSnippets(visibleSnippets, algorithms, rankingContext);
+		const rankingDuration = getMonotonicTime() - rankingStart;
 		const displayQuery = query ?? "";
 		this.emptyStateMessage = displayQuery
 			? `No snippets match "${displayQuery}". Showing all snippets.`
 			: null;
+			this.logQueryTelemetry({
+				query,
+				fallback: true,
+				entriesCount: this.entries.length,
+				filteredCount: 0,
+				visibleCount: visibleSnippets.length,
+				hiddenCount,
+				searchDuration,
+				rankingDuration,
+				algorithms,
+			});
 		return true;
+	}
+
+	private logQueryTelemetry(data: {
+		query: string;
+		fallback: boolean;
+		entriesCount: number;
+		filteredCount: number;
+		visibleCount: number;
+		hiddenCount: number;
+		searchDuration: number;
+		rankingDuration: number;
+		algorithms: RankingAlgorithmSetting[];
+	}): void {
+		const { query, fallback, entriesCount, filteredCount, visibleCount, hiddenCount, searchDuration, rankingDuration, algorithms } =
+			data;
+		const enabledAlgorithms = algorithms
+			.filter((algo) => algo.enabled)
+			.map((algo) => algo.id)
+			.join(", ");
+		const message = `[Telemetry] query="${query}" fallback=${fallback} visible=${visibleCount} hidden=${hiddenCount} filtered=${filteredCount} entries=${entriesCount} search=${searchDuration.toFixed(
+			2
+		)}ms rank=${rankingDuration.toFixed(2)}ms algos=[${enabledAlgorithms || "none"}]`;
+		this.options.logger.debug("menu", message);
 	}
 
 	private buildRankingContext(query: string) {
@@ -745,6 +810,20 @@ export class SnippetCompletionMenu {
 
 	private populateList(listEl: HTMLElement): void {
 		listEl.empty();
+
+		const algorithms = this.options.getRankingAlgorithms();
+		const enabled = algorithms.filter((algo) => algo.enabled);
+		const names = this.options.getRankingAlgorithmNames();
+		if (enabled.length > 0) {
+			const order = enabled
+				.map((algo) => names[algo.id] ?? algo.id)
+				.join(" ▶ ");
+			const badge = listEl.createDiv({
+				cls: "snippet-ranking-badge",
+				text: `Ranking: ${order}`,
+			});
+			badge.setAttribute("title", `Active algorithms: ${order}`);
+		}
 
 		if (this.emptyStateMessage) {
 			listEl.createDiv({

@@ -12,6 +12,7 @@ import type {
 	RankingAlgorithmId,
 	RankingAlgorithmSetting,
 	SnippetMenuKeymap,
+	VirtualTextColorPreset,
 } from "./types";
 import type { DebugCategory } from "./logger";
 import { BUILTIN_VARIABLES } from "./snippetBody";
@@ -20,6 +21,7 @@ import {
 	normalizeRankingAlgorithms,
 	toggleAlgorithmEnabled,
 } from "./rankingConfig";
+import { rankSnippets } from "./snippetRankingPipeline";
 
 const DEBUG_CATEGORY_KEYS: DebugCategory[] = [
 	"general",
@@ -83,6 +85,8 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 	private rankingListWrapper: HTMLElement | null = null;
 	private draggedAlgorithmId: RankingAlgorithmId | null = null;
 	private virtualPreviewSnippet: HTMLElement | null = null;
+	private newColorSchemeName = "";
+	private selectedColorPresetName: string | null = null;
 
 	constructor(app: App, plugin: TextSnippetsPlugin) {
 		super(app, plugin);
@@ -180,6 +184,7 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 		);
 
 		this.renderRankingAlgorithmSettings(containerEl, strings);
+		this.renderRankingPreview(containerEl, strings);
 
 		containerEl.createEl("h3", { text: strings.virtualSection });
 
@@ -195,6 +200,8 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 						this.plugin.applyRuntimeSettings();
 					})
 			);
+
+		this.renderVirtualTextSchemeControls(containerEl, strings);
 
 		this.addColorSetting(
 			containerEl,
@@ -370,6 +377,56 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 		for (const entry of normalized) {
 			this.renderRankingAlgorithmRow(entry, strings, enabledCount);
 		}
+	}
+
+	private renderRankingPreview(
+		containerEl: HTMLElement,
+		strings: ReturnType<TextSnippetsPlugin["getStrings"]>["settings"]
+	): void {
+		const wrapper = document.createElement("div");
+		wrapper.className = "ranking-preview-panel";
+		containerEl.appendChild(wrapper);
+		const titleEl = document.createElement("h4");
+		titleEl.textContent = strings.rankingPreviewTitle;
+		wrapper.appendChild(titleEl);
+		const descEl = document.createElement("p");
+		descEl.className = "setting-item-description";
+		descEl.textContent = strings.rankingPreviewDesc;
+		wrapper.appendChild(descEl);
+
+		const snippets = this.plugin.getAvailableSnippets();
+		if (snippets.length === 0) {
+			wrapper.createDiv({
+				cls: "ranking-preview-empty",
+				text: strings.rankingPreviewEmpty,
+			});
+			return;
+		}
+
+		const usage = this.plugin.getSnippetUsageCounts();
+		const ranked = rankSnippets(
+			snippets,
+			this.plugin.settings.rankingAlgorithms,
+			{ usage }
+		);
+		const previewList = document.createElement("div");
+		previewList.className = "ranking-preview-list";
+		wrapper.appendChild(previewList);
+		ranked.slice(0, 3).forEach((snippet) => {
+			const entry = document.createElement("div");
+			entry.className = "ranking-preview-entry";
+			const prefixEl = document.createElement("span");
+			prefixEl.className = "ranking-preview-entry-prefix";
+			prefixEl.textContent = snippet.prefix;
+			const usageEl = document.createElement("span");
+			usageEl.className = "ranking-preview-entry-usage";
+			usageEl.textContent = `${strings.rankingPreviewEntryUsage}: ${
+				usage.get(snippet.prefix) ?? 0
+			}`;
+			entry.appendChild(prefixEl);
+			entry.appendChild(usageEl);
+			previewList.appendChild(entry);
+		});
 	}
 
 	private renderRankingAlgorithmRow(
@@ -658,6 +715,64 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 		this.virtualPreviewSnippet.style.cssText = vars.join(";");
 	}
 
+	private renderVirtualTextSchemeControls(
+		containerEl: HTMLElement,
+		strings: ReturnType<TextSnippetsPlugin["getStrings"]>["settings"]
+	): void {
+		const presets = this.plugin.getVirtualTextColorPresets();
+		const activePreset = this.plugin.getSelectedVirtualTextPresetName();
+		this.selectedColorPresetName = activePreset || this.selectedColorPresetName;
+
+		new Setting(containerEl)
+			.setName(strings.virtualPreviewSchemeSelectName)
+			.setDesc(strings.virtualPreviewSchemeSelectDesc)
+			.addDropdown((dropdown) => {
+				dropdown.addOption("", strings.virtualPreviewSchemeSelectDefault);
+				for (const preset of presets) {
+					dropdown.addOption(preset.name, preset.name);
+				}
+				dropdown.setValue(this.selectedColorPresetName ?? "");
+				dropdown.onChange(async (value) => {
+					this.selectedColorPresetName = value || null;
+					if (!value) return;
+					const preset = presets.find((entry) => entry.name === value);
+					if (!preset) return;
+					this.plugin.applyVirtualTextColorPreset(preset);
+					await this.plugin.saveSettings();
+					this.updateVirtualPreviewStyles();
+					this.display();
+				});
+			});
+
+		new Setting(containerEl)
+			.setName(strings.virtualPreviewSchemeNameInputName)
+			.setDesc(strings.virtualPreviewSchemeNameInputDesc)
+			.addText((text) => {
+				text
+					.setPlaceholder(strings.virtualPreviewSchemeNameInputPlaceholder)
+					.setValue(this.newColorSchemeName)
+					.onChange((value) => {
+						this.newColorSchemeName = value;
+					});
+			})
+			.addButton((btn) =>
+				btn
+					.setButtonText(strings.virtualPreviewSaveScheme)
+					.setCta()
+					.onClick(() => void this.handleSaveColorScheme())
+			);
+
+		new Setting(containerEl)
+			.setName(strings.virtualPreviewImportScheme)
+			.setDesc(strings.virtualPreviewImportSchemeDesc)
+			.addButton((btn) =>
+				btn
+					.setButtonText(strings.virtualPreviewImportScheme)
+					.onClick(() => void this.handleImportColorScheme())
+			);
+
+	}
+
 	private renderVirtualTextPreview(
 		containerEl: HTMLElement,
 		strings: ReturnType<TextSnippetsPlugin["getStrings"]>["settings"]
@@ -707,6 +822,81 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 		snippet.appendChild(ghostTextSpan);
 		this.virtualPreviewSnippet = snippet;
 		this.updateVirtualPreviewStyles();
+	}
+
+	private buildCurrentColorPreset(name: string): VirtualTextColorPreset {
+		return {
+			name,
+			placeholderColor: this.plugin.settings.virtualTextColor,
+			placeholderActiveColor: this.plugin.settings.placeholderActiveColor,
+			ghostTextColor: this.plugin.settings.ghostTextColor,
+			choiceActiveColor: this.plugin.settings.choiceHighlightColor,
+			choiceInactiveColor: this.plugin.settings.choiceInactiveColor,
+		};
+	}
+
+	private async handleSaveColorScheme(): Promise<void> {
+		const strings = this.plugin.getStrings().settings;
+		const name = this.newColorSchemeName.trim();
+		if (!name) {
+			new Notice(strings.virtualPreviewSchemeNameRequired);
+			return;
+		}
+		this.plugin.saveVirtualTextColorPreset(
+			this.buildCurrentColorPreset(name)
+		);
+		this.selectedColorPresetName = name;
+		await this.plugin.saveSettings();
+		new Notice(strings.virtualPreviewSchemeSaved);
+		this.newColorSchemeName = "";
+		this.selectedColorPresetName = name;
+		this.display();
+	}
+
+	private async handleImportColorScheme(): Promise<void> {
+		const strings = this.plugin.getStrings().settings;
+		const promptFn =
+			typeof window !== "undefined" && typeof window.prompt === "function"
+				? window.prompt.bind(window)
+				: null;
+		if (!promptFn) {
+			new Notice(strings.virtualPreviewImportUnsupported);
+			return;
+		}
+		const raw = promptFn(strings.virtualPreviewImportPrompt);
+		if (!raw) return;
+		try {
+			const parsed = JSON.parse(raw);
+			if (!this.isValidColorPreset(parsed)) {
+				throw new Error("invalid preset");
+			}
+			const preset: VirtualTextColorPreset = {
+				...parsed,
+				name:
+					(parsed as VirtualTextColorPreset).name?.trim() ??
+					strings.virtualPreviewImportedName,
+			};
+			this.plugin.applyVirtualTextColorPreset(preset);
+			await this.plugin.saveSettings();
+			this.updateVirtualPreviewStyles();
+			new Notice(strings.virtualPreviewImportSuccess);
+			this.selectedColorPresetName = preset.name;
+			this.display();
+		} catch (error) {
+			new Notice(strings.virtualPreviewImportFailed);
+		}
+	}
+
+	private isValidColorPreset(data: unknown): data is VirtualTextColorPreset {
+		if (typeof data !== "object" || !data) return false;
+		const cast = data as Record<string, unknown>;
+		return (
+			typeof cast.placeholderColor === "string" &&
+			typeof cast.placeholderActiveColor === "string" &&
+			typeof cast.ghostTextColor === "string" &&
+			typeof cast.choiceActiveColor === "string" &&
+			typeof cast.choiceInactiveColor === "string"
+		);
 	}
 
 	private async handleReloadSnippets(): Promise<void> {

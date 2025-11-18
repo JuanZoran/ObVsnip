@@ -57,6 +57,17 @@ If your plugin does not need CSS, delete this file.
 	font-weight: 600;
 }
 
+.snippet-ranking-badge {
+	display: inline-block;
+	margin-bottom: 6px;
+	padding: 4px 8px;
+	border-radius: var(--radius-s);
+	background: var(--background-secondary);
+	font-size: 0.75em;
+	color: var(--text-muted);
+	text-transform: none;
+}
+
 .virtual-text-preview {
 	margin-top: 10px;
 	padding: 10px;
@@ -246,4 +257,39 @@ If your plugin does not need CSS, delete this file.
 	border: 1px solid transparent;
 	border-radius: var(--radius-s);
 	padding-left: 8px;
+}
+
+.ranking-preview-panel {
+	margin-top: 12px;
+	padding: 8px 12px;
+	border-radius: var(--radius-m);
+	border: 1px solid var(--background-modifier-border);
+	background: var(--background-secondary);
+}
+
+.ranking-preview-list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin-top: 8px;
+}
+
+.ranking-preview-entry {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	font-size: 0.85em;
+}
+
+.ranking-preview-entry-prefix {
+	font-weight: 600;
+}
+
+.ranking-preview-entry-usage {
+	color: var(--text-faint);
+}
+
+.ranking-preview-empty {
+	font-size: 0.85em;
+	color: var(--text-muted);
 }

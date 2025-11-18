@@ -74,6 +74,15 @@ export interface SnippetWidgetConfig {
 	choiceInactiveColor?: string;
 }
 
+export interface VirtualTextColorPreset {
+	name: string;
+	placeholderColor: string;
+	placeholderActiveColor: string;
+	ghostTextColor: string;
+	choiceActiveColor: string;
+	choiceInactiveColor: string;
+}
+
 export type RankingAlgorithmId =
 	| "fuzzy-match"
 	| "prefix-length"

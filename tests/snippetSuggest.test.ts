@@ -9,6 +9,14 @@ jest.mock('../src/editorUtils', () => ({
 	getEditorView: jest.fn().mockReturnValue(null),
 }));
 
+const rankingAlgorithmNames = {
+	"fuzzy-match": "Fuzzy match",
+	"prefix-length": "Prefix length",
+	alphabetical: "Alphabetical",
+	"usage-frequency": "Usage frequency",
+	"original-order": "Original order",
+};
+
 const createApp = () => ({ workspace: { getActiveViewOfType: () => null } }) as any;
 
 const createSnippet = (
@@ -110,6 +118,7 @@ describe('SnippetCompletionMenu UI flow', () => {
 			logger: new PluginLogger(),
 			getRankingAlgorithms: () => cloneDefaultRanking(),
 			getUsageCounts: () => new Map(),
+			getRankingAlgorithmNames: () => rankingAlgorithmNames,
 		});
 		document.body.innerHTML = '';
 	});
@@ -145,6 +154,7 @@ describe('SnippetCompletionMenu UI flow', () => {
 			logger: new PluginLogger(),
 			getRankingAlgorithms: () => ranking,
 			getUsageCounts: () => new Map(),
+			getRankingAlgorithmNames: () => rankingAlgorithmNames,
 		});
 		expect(menu.open(editor as any, 'hl')).toBe(true);
 		const titles = Array.from(document.querySelectorAll('.snippet-completion-title')).map((el) => el.textContent);
@@ -171,6 +181,7 @@ describe('SnippetCompletionMenu UI flow', () => {
 			logger: new PluginLogger(),
 			getRankingAlgorithms: () => prefixRanking,
 			getUsageCounts: () => new Map(),
+			getRankingAlgorithmNames: () => rankingAlgorithmNames,
 		});
 		expect(prefixMenu.open(editor as any, '')).toBe(true);
 		const titles = Array.from(document.querySelectorAll('.snippet-completion-title')).map((el) => el.textContent);
@@ -190,6 +201,7 @@ describe('SnippetCompletionMenu UI flow', () => {
 				{ id: "original-order", enabled: true },
 			],
 			getUsageCounts: () => new Map(),
+			getRankingAlgorithmNames: () => rankingAlgorithmNames,
 			getPrefixInfo: () => ({ minLength: 1, maxLength: 5 }),
 		});
 
@@ -216,6 +228,7 @@ describe('SnippetCompletionMenu UI flow', () => {
 				{ id: "original-order", enabled: true },
 			],
 			getUsageCounts: () => new Map(),
+			getRankingAlgorithmNames: () => rankingAlgorithmNames,
 			getPrefixInfo: () => ({ minLength: 1, maxLength: 6 }),
 		});
 
@@ -239,6 +252,7 @@ describe('SnippetCompletionMenu UI flow', () => {
 			logger: new PluginLogger(),
 			getRankingAlgorithms: () => cloneDefaultRanking(),
 			getUsageCounts: () => new Map(),
+			getRankingAlgorithmNames: () => rankingAlgorithmNames,
 		});
 
 		expect(menu.open(editor as any, 'none')).toBe(true);
@@ -263,6 +277,7 @@ describe('SnippetCompletionMenu UI flow', () => {
 			logger: new PluginLogger(),
 			getRankingAlgorithms: () => cloneDefaultRanking(),
 			getUsageCounts: () => new Map(),
+			getRankingAlgorithmNames: () => rankingAlgorithmNames,
 		});
 
 		expect(menu.open(editor as any, 'hidden-snippet')).toBe(true);
@@ -287,6 +302,7 @@ describe('SnippetCompletionMenu UI flow', () => {
 			logger: new PluginLogger(),
 			getRankingAlgorithms: () => cloneDefaultRanking(),
 			getUsageCounts: () => new Map(),
+			getRankingAlgorithmNames: () => rankingAlgorithmNames,
 		});
 
 		expect(menu.open(editor as any, '')).toBe(false);

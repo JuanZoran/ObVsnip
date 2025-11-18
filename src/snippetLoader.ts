@@ -1,7 +1,8 @@
-import { App, Notice, TFile } from 'obsidian';
-import { ParsedSnippet } from './types';
-import { SnippetParser } from './snippetParser';
-import { PluginLogger } from './logger';
+import { App, Notice, TFile } from "obsidian";
+import { ParsedSnippet } from "./types";
+import { SnippetParser } from "./snippetParser";
+import { PluginLogger } from "./logger";
+import { getMonotonicTime } from "./telemetry";
 
 /**
  * Handles loading and managing snippet files
@@ -15,6 +16,7 @@ export class SnippetLoader {
 	 * @returns Array of parsed snippets
 	 */
 	async loadFromFile(filePath: string): Promise<ParsedSnippet[]> {
+		const loadStart = getMonotonicTime();
 
 		try {
 			this.logger.debug("loader", `📂 Loading snippets from: ${filePath}`);
@@ -47,7 +49,8 @@ export class SnippetLoader {
 				new Notice(`Error: ${message}`, 5000);
 				return [];
 			}
-			this.logSnippetsLoaded(filePath, snippets);
+			const duration = getMonotonicTime() - loadStart;
+			this.logSnippetsLoaded(filePath, snippets, duration);
 
 			return snippets;
 		} catch (error) {
@@ -80,9 +83,19 @@ export class SnippetLoader {
 	/**
 	 * Log loaded snippets
 	 */
-	private logSnippetsLoaded(filePath: string, snippets: ParsedSnippet[]): void {
+	private logSnippetsLoaded(
+		filePath: string,
+		snippets: ParsedSnippet[],
+		durationMs: number
+	): void {
 		this.logger.debug("loader", '=== ObVsnip ===');
-		this.logger.debug("loader", `✅ Loaded ${snippets.length} snippets from: ${filePath}`);
+		const hiddenCount = snippets.filter((snippet) => snippet.hide).length;
+		this.logger.debug(
+			"loader",
+			`✅ Loaded ${snippets.length} snippets from: ${filePath} (${hiddenCount} hidden) in ${durationMs.toFixed(
+				2
+			)}ms`
+		);
 		this.logger.debug("loader", 'Snippets:');
 		snippets.forEach((snippet, index) => {
 			const preview = snippet.body.substring(0, 50).replace(/\n/g, '\\n');

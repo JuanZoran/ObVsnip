@@ -36,6 +36,10 @@ export interface LocaleStrings {
 		rankingSection: string;
 		rankingSectionDesc: string;
 		rankingStableNote: string;
+		rankingPreviewTitle: string;
+		rankingPreviewDesc: string;
+		rankingPreviewEmpty: string;
+		rankingPreviewEntryUsage: string;
 		rankingAlgorithmNames: Record<RankingAlgorithmId, string>;
 		rankingAlgorithmEnabledDesc: string;
 		rankingAlgorithmDisabledDesc: string;
@@ -58,6 +62,22 @@ export interface LocaleStrings {
 		virtualPreviewSampleChoices: string[];
 		virtualPreviewSampleGreeting: string;
 		virtualPreviewSampleActivePlaceholder: string;
+		virtualPreviewSchemeSelectName: string;
+		virtualPreviewSchemeSelectDesc: string;
+		virtualPreviewSchemeSelectDefault: string;
+		virtualPreviewSchemeNameInputName: string;
+		virtualPreviewSchemeNameInputDesc: string;
+		virtualPreviewSchemeNameInputPlaceholder: string;
+		virtualPreviewSaveScheme: string;
+		virtualPreviewImportScheme: string;
+		virtualPreviewSchemeNameRequired: string;
+		virtualPreviewSchemeSaved: string;
+		virtualPreviewImportPrompt: string;
+		virtualPreviewImportSuccess: string;
+		virtualPreviewImportFailed: string;
+		virtualPreviewImportUnsupported: string;
+		virtualPreviewImportedName: string;
+		virtualPreviewImportSchemeDesc: string;
 		debugSection: string;
 		debugName: string;
 		debugDesc: string;
@@ -116,6 +136,11 @@ const translations: Record<LocaleKey, LocaleStrings> = {
 				"Enable scoring strategies and drag enabled ones to prioritize them (disabled strategies stay at the bottom).",
 			rankingStableNote:
 				"Original order acts as a stable tiebreaker when a single algorithm is enabled.",
+			rankingPreviewTitle: "Ranking preview",
+			rankingPreviewDesc:
+				"Simulate how enabled algorithms order the top snippets and surface usage counts.",
+			rankingPreviewEmpty: "No snippets loaded yet.",
+			rankingPreviewEntryUsage: "Usage",
 			rankingAlgorithmNames: {
 				"fuzzy-match": "Fuzzy match",
 				"prefix-length": "Prefix length",
@@ -146,6 +171,28 @@ const translations: Record<LocaleKey, LocaleStrings> = {
 			virtualPreviewSampleChoices: ["Option A", "Option B", "Option C"],
 			virtualPreviewSampleGreeting: " — Hello world, $0",
 			virtualPreviewSampleActivePlaceholder: "Active placeholder",
+			virtualPreviewSchemeSelectName: "Saved color schemes",
+			virtualPreviewSchemeSelectDesc:
+				"Apply a previously saved palette to the current view.",
+			virtualPreviewSchemeSelectDefault: "— select —",
+			virtualPreviewSchemeNameInputName: "Scheme name",
+			virtualPreviewSchemeNameInputDesc:
+				"Give the current palette a name before saving it.",
+			virtualPreviewSchemeNameInputPlaceholder: "Enter scheme name",
+			virtualPreviewSaveScheme: "Save scheme",
+			virtualPreviewImportScheme: "Import scheme",
+			virtualPreviewImportSchemeDesc:
+				"Paste JSON to import a saved color palette.",
+			virtualPreviewSchemeNameRequired:
+				"Please provide a name before saving the scheme.",
+			virtualPreviewSchemeSaved: "Color scheme saved.",
+			virtualPreviewImportPrompt:
+				"Paste the JSON representation of a saved color scheme.",
+			virtualPreviewImportSuccess: "Color scheme imported.",
+			virtualPreviewImportFailed: "Invalid color scheme JSON.",
+			virtualPreviewImportUnsupported:
+				"Import is not supported in this environment.",
+			virtualPreviewImportedName: "Imported scheme",
 		debugSection: "🛠️ Debugging",
 			debugName: "Enable debug mode",
 			debugDesc: "Print diagnostic information to the developer console.",
@@ -221,8 +268,13 @@ const translations: Record<LocaleKey, LocaleStrings> = {
 			rankingSection: "🏅 排序算法",
 			rankingSectionDesc:
 				"打开算法后可拖动改变优先级，未开启的算法则固定在底部。",
-			rankingStableNote:
-				"仅剩一个排序算法时，插件默认使用原始顺序做稳定的 tiebreaker。",
+				rankingStableNote:
+					"仅剩一个排序算法时，插件默认使用原始顺序做稳定的 tiebreaker。",
+				rankingPreviewTitle: "排序预览",
+				rankingPreviewDesc:
+					"模拟当前启用的算法如何对片段排序，并展示使用次数。",
+				rankingPreviewEmpty: "尚未加载任何片段。",
+				rankingPreviewEntryUsage: "使用次数",
 			rankingAlgorithmNames: {
 				"fuzzy-match": "模糊匹配",
 				"prefix-length": "前缀长度",
@@ -253,6 +305,25 @@ const translations: Record<LocaleKey, LocaleStrings> = {
 					virtualPreviewSampleChoices: ["选项一", "选项二", "选项三"],
 					virtualPreviewSampleGreeting: " — 你好，$0",
 					virtualPreviewSampleActivePlaceholder: "活跃占位符",
+					virtualPreviewSchemeSelectName: "保存的配色方案",
+					virtualPreviewSchemeSelectDesc:
+						"选择已保存的配色即可立即应用。",
+					virtualPreviewSchemeSelectDefault: "— 选择 —",
+					virtualPreviewSchemeNameInputName: "方案名称",
+					virtualPreviewSchemeNameInputDesc: "为当前配色输入名称。",
+					virtualPreviewSchemeNameInputPlaceholder: "输入方案名称",
+					virtualPreviewSaveScheme: "保存方案",
+					virtualPreviewImportScheme: "导入方案",
+					virtualPreviewImportSchemeDesc:
+						"粘贴 JSON 文本以导入配色方案。",
+					virtualPreviewSchemeNameRequired: "请先填写方案名称。",
+					virtualPreviewSchemeSaved: "已保存配色方案。",
+					virtualPreviewImportPrompt:
+						"粘贴配色方案的 JSON 内容以导入。",
+					virtualPreviewImportSuccess: "配色方案导入成功。",
+					virtualPreviewImportFailed: "配色方案格式无效。",
+					virtualPreviewImportUnsupported: "当前环境不支持导入。",
+					virtualPreviewImportedName: "导入的方案",
 			debugSection: "🛠️ 调试",
 			debugName: "开启调试模式",
 			debugDesc: "在开发者控制台输出诊断信息。",
