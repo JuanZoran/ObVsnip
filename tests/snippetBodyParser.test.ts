@@ -85,6 +85,7 @@ describe('processSnippetBody edge cases', () => {
 		expect(result.text).toContain('good');
 		expect(result.text).toContain('${escaped}');
 	});
+
 });
 
 describe('SnippetParser.parseJson', () => {
@@ -139,5 +140,18 @@ describe('SnippetParser.parseJson', () => {
 		const json = JSON.stringify({ demo: { prefix: 'demo', body: 'body' } });
 		expect(() => SnippetParser.parseJson(json)).toThrow(/bad placeholder/);
 		spy.mockRestore();
+	});
+
+	it('handles heavy escaping without breaking tab stops', () => {
+		const body =
+			'Esc \\${keep} literal \\\\ text ${1:inner \\${deep}} after \\$ dollar ${2|Yes,No|}';
+		const result = processSnippetBody(body);
+
+		expect(result.text).toContain('Esc ${keep}');
+		expect(result.text).toContain('inner ${deep}');
+		expect(result.text).toContain('after $ dollar');
+		expect(result.tabStops.map((stop) => stop.index)).toEqual([0, 1, 2]);
+		const stop2 = getStop(result.tabStops, 2);
+		expect(stop2?.choices).toEqual(['Yes', 'No']);
 	});
 });

@@ -55,9 +55,12 @@ describe('variableResolver built-ins', () => {
 		const clipboard = { readText: jest.fn().mockReturnValue('clip') };
 		const originalRequire = (window as any).require;
 		(window as any).require = () => ({ clipboard });
-		expect(resolveVariableValue('VAULT_NAME', { app: app as any, editor: editor as any }).value).toBe('Vault');
-		expect(resolveVariableValue('TM_CLIPBOARD', { app: app as any, editor: editor as any }).value).toBe('clip');
-		(window as any).require = originalRequire;
+		try {
+			expect(resolveVariableValue('VAULT_NAME', { app: app as any, editor: editor as any }).value).toBe('Vault');
+			expect(resolveVariableValue('TM_CLIPBOARD', { app: app as any, editor: editor as any }).value).toBe('clip');
+		} finally {
+			(window as any).require = originalRequire;
+		}
 	});
 
 	it('generates date/time variables', () => {
@@ -99,11 +102,12 @@ describe('variableResolver built-ins', () => {
 		const editor = createEditor();
 		const originalRequire = (window as any).require;
 		(window as any).require = () => ({ clipboard: { readText: () => null } });
-
-		const result = resolveVariableValue('TM_CLIPBOARD', { app: app as any, editor: editor as any });
-		expect(result.value).toBeNull();
-		expect(result.reason).toBe('Clipboard unavailable');
-
-		(window as any).require = originalRequire;
+		try {
+			const result = resolveVariableValue('TM_CLIPBOARD', { app: app as any, editor: editor as any });
+			expect(result.value).toBeNull();
+			expect(result.reason).toBe('Clipboard unavailable');
+		} finally {
+			(window as any).require = originalRequire;
+		}
 	});
 });

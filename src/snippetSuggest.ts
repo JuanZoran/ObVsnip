@@ -495,33 +495,68 @@ export class SnippetCompletionMenu {
 
 	private resolveQueryContext(
 		editor: Editor
-	): { text: string; range: { from: EditorPosition; to: EditorPosition } } | null {
+	): {
+		text: string;
+		range: { from: EditorPosition; to: EditorPosition };
+		windowLimited: boolean;
+	} | null {
 		const prefixInfo = this.options.getPrefixInfo?.();
-		if (!prefixInfo) return null;
+		if (!prefixInfo?.maxLength) return null;
 		const context = getContextBeforeCursor({
 			editor,
 			prefixInfo,
 		});
 		if (!context) return null;
-		const from = editor.offsetToPos(context.startOffset);
-		const to = editor.offsetToPos(context.endOffset);
-		return { text: context.text, range: { from, to } };
+		const cursor = editor.getCursor();
+		let from = editor.offsetToPos(context.startOffset);
+		const span = context.endOffset - context.startOffset;
+		const windowLimited =
+			span >= prefixInfo.maxLength && prefixInfo.maxLength > 0;
+		let text = context.text;
+		let range = {
+			from,
+			to: cursor,
+		};
+
+		if (windowLimited) {
+			const previousLineContext = this.getPreviousLineBeforeCursor(
+				editor,
+				cursor
+			);
+			if (previousLineContext) {
+				text = previousLineContext.text;
+				range = previousLineContext.range;
+				from = range.from;
+			} else if (from.line === cursor.line) {
+				const line = editor.getLine(cursor.line) ?? "";
+				const expandedStart = this.expandQueryStart(line, from.ch);
+				if (expandedStart !== from.ch) {
+					text = line.slice(expandedStart, cursor.ch);
+					range = {
+						from: { line: cursor.line, ch: expandedStart },
+						to: cursor,
+					};
+					from = range.from;
+				}
+			}
+		}
+
+		return {
+			text,
+			range,
+			windowLimited,
+		};
 	}
 
 	private buildRegexQueryContext(
 		editor: Editor
 	): { text: string; range: { from: EditorPosition; to: EditorPosition } } {
 		const cursor = editor.getCursor();
-
 		const line = editor.getLine(cursor.line) ?? "";
-
 		const prefix = line.slice(0, cursor.ch);
-
-		const asciiMatch = prefix.match(/([a-zA-Z0-9_]+)$/);
-		const match = asciiMatch ?? prefix.match(/(\S+)$/);
-
-		const text = match?.[0] ?? "";
-		const start = Math.max(0, cursor.ch - text.length);
+		const firstNonSpace = prefix.search(/\S/);
+		const start = firstNonSpace >= 0 ? firstNonSpace : cursor.ch;
+		const text = prefix.slice(start);
 
 		return {
 			text,
@@ -532,12 +567,50 @@ export class SnippetCompletionMenu {
 		};
 	}
 
+	private expandQueryStart(line: string, startCh: number): number {
+		let boundary = startCh;
+		while (boundary > 0 && /\s/.test(line[boundary - 1])) {
+			boundary--;
+		}
+		while (boundary > 0 && !/\s/.test(line[boundary - 1])) {
+			boundary--;
+		}
+		return boundary;
+	}
+
+	private getPreviousLineBeforeCursor(
+		editor: Editor,
+		cursor: EditorPosition
+	): { text: string; range: { from: EditorPosition; to: EditorPosition } } | null {
+		if (cursor.line === 0) return null;
+		const prevLine = editor.getLine(cursor.line - 1) ?? "";
+		const trimmedStart = prevLine.search(/\S/);
+		if (trimmedStart === -1) return null;
+		return {
+			text: prevLine.slice(trimmedStart),
+			range: {
+				from: { line: cursor.line - 1, ch: trimmedStart },
+				to: { line: cursor.line - 1, ch: prevLine.length },
+			},
+		};
+	}
+
 	private getQueryContext(
 		editor: Editor,
 		provided?: string
 	): { text: string; range: { from: EditorPosition; to: EditorPosition } } {
 		const resolved = this.resolveQueryContext(editor);
-		if (resolved) return resolved;
+		if (resolved) {
+			const spansMultipleLines =
+				resolved.range.from.line !== resolved.range.to.line;
+			if (resolved.windowLimited && spansMultipleLines) {
+				return this.buildRegexQueryContext(editor);
+			}
+			return {
+				text: resolved.text,
+				range: resolved.range,
+			};
+		}
 		if (provided && provided.length > 0) {
 			const cursor = editor.getCursor();
 			const startCh = Math.max(0, cursor.ch - provided.length);
@@ -549,7 +622,8 @@ export class SnippetCompletionMenu {
 				},
 			};
 		}
-		return this.buildRegexQueryContext(editor);
+		const fallback = this.buildRegexQueryContext(editor);
+		return fallback;
 	}
 
 	private positionContainer(coords: { top: number; left: number }): void {

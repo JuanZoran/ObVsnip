@@ -137,4 +137,48 @@ describe('SnippetCompletionMenu UI flow', () => {
 		expect(titles[0]).toBe('log');
 		prefixMenu.close();
 	});
+
+	it('matches long prefixes even when prefix window is limited', () => {
+		snippets = [createSnippet('snippet long', 'body')];
+		editor = new MockEditor('snippet long');
+		editor.setCursor({ line: 0, ch: 'snippet long'.length });
+		menu = new SnippetCompletionMenu(createApp(), {
+			getSnippets: () => snippets,
+			manager,
+			logger: new PluginLogger(),
+			getSortMode: () => 'none',
+			getPrefixInfo: () => ({ minLength: 1, maxLength: 5 }),
+		});
+
+		expect(menu.open(editor as any, '')).toBe(true);
+
+		const emptyState = document.querySelector('.snippet-completion-empty');
+		expect(emptyState).toBeNull();
+
+		const titles = Array.from(document.querySelectorAll('.snippet-completion-title')).map((el) => el.textContent);
+		expect(titles).toContain('snippet long');
+	});
+
+	it('matches prefixes that span multiple lines', () => {
+		const prefix = 'snippet multi';
+		const bodyText = `${prefix}\nsecond line`;
+		snippets = [createSnippet(prefix, 'body')];
+		editor = new MockEditor(bodyText);
+		editor.setCursor({ line: 1, ch: 'second line'.length });
+		menu = new SnippetCompletionMenu(createApp(), {
+			getSnippets: () => snippets,
+			manager,
+			logger: new PluginLogger(),
+			getSortMode: () => 'none',
+			getPrefixInfo: () => ({ minLength: 1, maxLength: 6 }),
+		});
+
+		expect(menu.open(editor as any, '')).toBe(true);
+
+		const emptyState = document.querySelector('.snippet-completion-empty');
+		expect(emptyState).toBeNull();
+
+		const titles = Array.from(document.querySelectorAll('.snippet-completion-title')).map((el) => el.textContent);
+		expect(titles).toContain(prefix);
+	});
 });
