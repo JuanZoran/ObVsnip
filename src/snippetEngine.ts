@@ -21,6 +21,10 @@ export class SnippetEngine {
 		this.calculatePrefixRange();
 	}
 
+	getPrefixInfo(): PrefixInfo {
+		return { ...this.prefixInfo };
+	}
+
 	/**
 	 * Get all snippets
 	 */
@@ -62,32 +66,28 @@ export class SnippetEngine {
 		};
 	}
 
-	/**
-	 * Match snippet at cursor position using Trie + character extraction
-	 * Algorithm:
-	 * 1. Extract up to maxLength characters before cursor
-	 * 2. Try substrings from minLength onwards
-	 * 3. Search in Trie from longest to shortest
-	 */
-	matchSnippetAtCursor(
-		line: string,
-		cursorPos: number
-	): ParsedSnippet | undefined {
+	matchSnippetInContext(beforeCursor: string): ParsedSnippet | undefined {
 		if (this.prefixInfo.maxLength === 0) {
 			return undefined;
 		}
 
-		// Extract characters before cursor
-		const startPos = Math.max(0, cursorPos - this.prefixInfo.maxLength);
-		const beforeCursor = line.substring(startPos, cursorPos);
+		const relevantText =
+			beforeCursor.length > this.prefixInfo.maxLength
+				? beforeCursor.slice(-this.prefixInfo.maxLength)
+				: beforeCursor;
 
 		// Try matching from minLength to maxLength, longest first
 		for (
-			let len = Math.min(beforeCursor.length, this.prefixInfo.maxLength);
+			let len = Math.min(
+				relevantText.length,
+				this.prefixInfo.maxLength
+			);
 			len >= this.prefixInfo.minLength;
 			len--
 		) {
-			const prefix = beforeCursor.substring(beforeCursor.length - len);
+			const prefix = relevantText.substring(
+				relevantText.length - len
+			);
 			const snippet = this.findByPrefix(prefix);
 			if (snippet) {
 				return snippet;

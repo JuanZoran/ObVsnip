@@ -107,7 +107,7 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 				btn
 					.setButtonText(strings.snippetFilesAddButton)
 					.setCta()
-					.onClick(() => this.showFileMenu())
+					.onClick((event) => this.showFileMenu(event))
 			)
 			.addButton((btn) =>
 				btn
@@ -290,7 +290,7 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 		modal.open();
 	}
 
-private showFileMenu(): void {
+	private showFileMenu(event: MouseEvent | undefined): void {
 		const files = this.plugin.getSnippetLoader().getTextFiles();
 
 		if (files.length === 0) {
@@ -298,7 +298,7 @@ private showFileMenu(): void {
 			return;
 		}
 
-const menu = new Menu();
+		const menu = new Menu();
 		files.forEach((file: TFile) => {
 			menu.addItem((item) =>
 				item.setTitle(file.path).onClick(async () => {
@@ -307,7 +307,16 @@ const menu = new Menu();
 			);
 		});
 
-menu.showAtMouseEvent(event as MouseEvent);
+		if (event) {
+			menu.showAtMouseEvent(event);
+			return;
+		}
+
+		// Fallback in case the mouse event is unavailable.
+		menu.showAtPosition({
+			x: window.innerWidth / 2,
+			y: window.innerHeight / 2,
+		});
 	}
 
 	private addMenuKeySetting(

@@ -9,6 +9,8 @@
 -   内置变量：`TM_FILENAME`, `TM_FILEPATH`, `TM_FOLDER`, `VAULT_NAME`, `TM_SELECTED_TEXT`, `TM_CLIPBOARD`, `CURRENT_YEAR`, `CURRENT_MONTH`, `CURRENT_DATE`, `CURRENT_HOUR`, `CURRENT_MINUTE`, `CURRENT_SECOND`, `TIME_FORMATTED`。变量说明可在设置页的“Built-in variables”按钮查看。
 -   调试：可以启用 Debug Mode 并仅输出特定模块（General / Loader / Parser / Manager / Menu / Session）的日志，便于定位问题。
 
+
+
 ## 安装
 
 1. 将仓库放入 `{Vault}/.obsidian/plugins/text-trigger-obsidian`。

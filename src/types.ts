@@ -13,8 +13,6 @@ export interface VscodeSnippet {
 	description?: string;
 	hide?: boolean;
 	priority?: number;
-	sourceTag?: string;
-	dynamicMeta?: Record<string, unknown>;
 }
 
 /**

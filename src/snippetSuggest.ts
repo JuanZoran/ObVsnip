@@ -1,12 +1,13 @@
 import { App, Editor, type EditorPosition } from "obsidian";
 
-import type { ParsedSnippet } from "./types";
+import type { ParsedSnippet, PrefixInfo } from "./types";
 
 import { SnippetManager } from "./snippetManager";
 
 import { PluginLogger } from "./logger";
 
 import { getActiveEditor, getEditorView } from "./editorUtils";
+import { getContextBeforeCursor } from "./prefixContext";
 
 export type SnippetSortMode = "none" | "smart" | "prefix-length";
 
@@ -18,6 +19,7 @@ interface SnippetMenuOptions {
 	logger: PluginLogger;
 
 	getSortMode: () => SnippetSortMode;
+	getPrefixInfo?: () => PrefixInfo;
 }
 
 export class SnippetCompletionMenu {
@@ -90,8 +92,12 @@ export class SnippetCompletionMenu {
 		this.captureInitialSelection(targetEditor);
 		this.mouseMovedSinceOpen = false;
 
-		this.currentQuery = initialQuery ?? "";
-		this.setQueryAnchor(targetEditor);
+		const queryContext = this.getQueryContext(
+			targetEditor,
+			initialQuery
+		);
+		this.currentQuery = queryContext.text;
+		this.queryAnchorPos = queryContext.range.from;
 
 		const hasEntries = this.updateEntriesForQuery(this.currentQuery);
 
@@ -413,11 +419,11 @@ export class SnippetCompletionMenu {
 	private refreshEntries(): void {
 		if (!this.currentEditor) return;
 
-		const newQuery = this.extractQuery(this.currentEditor);
-
+		const context = this.getQueryContext(this.currentEditor);
+		const newQuery = context.text;
 		if (newQuery === this.currentQuery) return;
-
 		this.currentQuery = newQuery;
+		this.queryAnchorPos = context.range.from;
 
 		const hasEntries = this.updateEntriesForQuery(this.currentQuery);
 
@@ -487,7 +493,24 @@ export class SnippetCompletionMenu {
 		return { top, left };
 	}
 
-	private extractQuery(editor: Editor): string {
+	private resolveQueryContext(
+		editor: Editor
+	): { text: string; range: { from: EditorPosition; to: EditorPosition } } | null {
+		const prefixInfo = this.options.getPrefixInfo?.();
+		if (!prefixInfo) return null;
+		const context = getContextBeforeCursor({
+			editor,
+			prefixInfo,
+		});
+		if (!context) return null;
+		const from = editor.offsetToPos(context.startOffset);
+		const to = editor.offsetToPos(context.endOffset);
+		return { text: context.text, range: { from, to } };
+	}
+
+	private buildRegexQueryContext(
+		editor: Editor
+	): { text: string; range: { from: EditorPosition; to: EditorPosition } } {
 		const cursor = editor.getCursor();
 
 		const line = editor.getLine(cursor.line) ?? "";
@@ -497,7 +520,36 @@ export class SnippetCompletionMenu {
 		const asciiMatch = prefix.match(/([a-zA-Z0-9_]+)$/);
 		const match = asciiMatch ?? prefix.match(/(\S+)$/);
 
-		return match?.[0] ?? "";
+		const text = match?.[0] ?? "";
+		const start = Math.max(0, cursor.ch - text.length);
+
+		return {
+			text,
+			range: {
+				from: { line: cursor.line, ch: start },
+				to: cursor,
+			},
+		};
+	}
+
+	private getQueryContext(
+		editor: Editor,
+		provided?: string
+	): { text: string; range: { from: EditorPosition; to: EditorPosition } } {
+		const resolved = this.resolveQueryContext(editor);
+		if (resolved) return resolved;
+		if (provided && provided.length > 0) {
+			const cursor = editor.getCursor();
+			const startCh = Math.max(0, cursor.ch - provided.length);
+			return {
+				text: provided,
+				range: {
+					from: { line: cursor.line, ch: startCh },
+					to: cursor,
+				},
+			};
+		}
+		return this.buildRegexQueryContext(editor);
 	}
 
 	private positionContainer(coords: { top: number; left: number }): void {
@@ -573,19 +625,12 @@ export class SnippetCompletionMenu {
 			return anchorRange;
 		}
 
-		const latestQuery = this.extractQuery(editor);
-		const queryStart = Math.max(0, cursor.ch - latestQuery.length);
-		return {
-			from: { line: cursor.line, ch: queryStart },
-			to: cursor,
-		};
-	}
-
-	private setQueryAnchor(editor: Editor): void {
-		const cursor = editor.getCursor();
-		const initialQuery = this.currentQuery ?? "";
-		const startCh = Math.max(0, cursor.ch - initialQuery.length);
-		this.queryAnchorPos = { line: cursor.line, ch: startCh };
+		const fallbackContext = this.getQueryContext(
+			editor,
+			this.currentQuery
+		);
+		this.queryAnchorPos = fallbackContext.range.from;
+		return fallbackContext.range;
 	}
 
 	private getAnchorRange(
@@ -593,10 +638,9 @@ export class SnippetCompletionMenu {
 	): { from: EditorPosition; to: EditorPosition } | null {
 		if (!this.queryAnchorPos) return null;
 		const cursor = editor.getCursor();
-		if (cursor.line !== this.queryAnchorPos.line) {
-			return null;
-		}
-		if (cursor.ch < this.queryAnchorPos.ch) {
+		const anchorOffset = editor.posToOffset(this.queryAnchorPos);
+		const cursorOffset = editor.posToOffset(cursor);
+		if (cursorOffset < anchorOffset) {
 			return null;
 		}
 		return {
@@ -650,8 +694,9 @@ export class SnippetCompletionMenu {
 			normalized,
 			normalized.length === 0
 		);
-		this.emptyStateMessage = query
-			? `No snippets match "${query}". Showing all snippets.`
+		const displayQuery = query ?? "";
+		this.emptyStateMessage = displayQuery
+			? `No snippets match "${displayQuery}". Showing all snippets.`
 			: null;
 		return true;
 	}
@@ -673,10 +718,10 @@ export class SnippetCompletionMenu {
 
 			item.dataset.index = index.toString();
 
-			item.createDiv({
+			const titleEl = item.createDiv({
 				cls: "snippet-completion-title",
-				text: snippet.prefix,
 			});
+			this.renderTitleWithOverlap(titleEl, snippet);
 
 			if (snippet.description) {
 				item.createDiv({
@@ -700,5 +745,39 @@ export class SnippetCompletionMenu {
 
 	private handlePointerMove(): void {
 		this.mouseMovedSinceOpen = true;
+	}
+
+	private renderTitleWithOverlap(
+		titleEl: HTMLElement,
+		snippet: ParsedSnippet
+	): void {
+		const prefix = snippet.prefix;
+		const shouldHighlight = !!this.emptyStateMessage;
+		if (!shouldHighlight || !this.currentEditor) {
+			titleEl.setText(prefix);
+			return;
+		}
+		const overlap = this.findPrefixOverlapLength(
+			snippet,
+			this.currentEditor
+		);
+		if (overlap <= 0) {
+			titleEl.setText(prefix);
+			return;
+		}
+		const before = prefix.slice(0, overlap);
+		const after = prefix.slice(overlap);
+		titleEl.empty();
+		if (before) {
+			titleEl.createSpan({
+				cls: "snippet-completion-match",
+				text: before,
+			});
+		}
+		if (after) {
+			titleEl.createSpan({
+				text: after,
+			});
+		}
 	}
 }

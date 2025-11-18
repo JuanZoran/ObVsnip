@@ -21,6 +21,7 @@ import {
 	getLocaleStrings,
 	type LocaleStrings,
 } from "./src/i18n";
+import { getContextBeforeCursor } from "./src/prefixContext";
 
 interface PluginSettings {
 	snippetFiles: string[];
@@ -97,6 +98,7 @@ export default class TextSnippetsPlugin extends Plugin {
 			manager: this.snippetManager,
 			logger: this.logger,
 			getSortMode: () => this.settings.menuSortMode,
+			getPrefixInfo: () => this.snippetEngine.getPrefixInfo(),
 		});
 		this.registerEvent(
 			this.app.workspace.on("active-leaf-change", () => {
@@ -335,7 +337,7 @@ export default class TextSnippetsPlugin extends Plugin {
 		if (this.snippetManager.cycleChoiceAtCurrentStop()) {
 			return true;
 		}
-		const query = this.extractQueryFragment(editor);
+		const query = this.resolveQueryFragment(editor);
 		return this.snippetMenu.toggle(editor, query);
 	}
 
@@ -347,17 +349,19 @@ export default class TextSnippetsPlugin extends Plugin {
 		if (!targetEditor) {
 			return false;
 		}
-		const query = initialQuery ?? this.extractQueryFragment(targetEditor);
+		const query = initialQuery && initialQuery.length > 0
+			? initialQuery
+			: this.resolveQueryFragment(targetEditor);
 		return this.snippetMenu.open(targetEditor, query);
 	}
 
-	private extractQueryFragment(editor: Editor): string {
-		const cursor = editor.getCursor();
-		const line = editor.getLine(cursor.line) ?? "";
-		const prefix = line.slice(0, cursor.ch);
-		const asciiMatch = prefix.match(/([a-zA-Z0-9_]+)$/);
-		const match = asciiMatch ?? prefix.match(/(\S+)$/);
-		return match?.[0] ?? "";
+	private resolveQueryFragment(editor: Editor): string {
+		const prefixInfo = this.snippetEngine.getPrefixInfo();
+		const context = getContextBeforeCursor({
+			editor,
+			prefixInfo,
+		});
+		return context?.text ?? "";
 	}
 
 	public applyRuntimeSettings(): void {

@@ -254,3 +254,17 @@ export const snippetSessionExtensions: Extension[] = [snippetSessionField, snipp
 export const setSnippetWidgetConfig = (config: Partial<SnippetWidgetConfig>): void => {
 	widgetConfig = { ...widgetConfig, ...config };
 };
+
+export const getSnippetSessionStack = (view?: EditorView): SnippetSessionEntry[] | null => {
+	if (!view) return null;
+	try {
+		return view.state.field(snippetSessionField);
+	} catch {
+		return null;
+	}
+};
+
+export const isSnippetSessionActive = (view?: EditorView): boolean => {
+	const stack = getSnippetSessionStack(view);
+	return !!stack && stack.length > 0;
+};

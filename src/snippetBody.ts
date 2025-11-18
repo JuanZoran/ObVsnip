@@ -108,6 +108,7 @@ interface PlaceholderParseResult {
 	index: number;
 	text: string;
 	inner: ParsedPlaceholderRange[];
+	variables: ParsedVariableRange[];
 	choices?: string[];
 }
 
@@ -153,21 +154,29 @@ class SnippetBodyParser {
 					continue;
 				}
 
-				const placeholder = this.parsePlaceholder();
-				if (placeholder) {
-					const start = text.length;
-					text += placeholder.text;
+			const placeholder = this.parsePlaceholder();
+			if (placeholder) {
+				const start = text.length;
+				text += placeholder.text;
 					const end = text.length;
 					placeholders.push({ index: placeholder.index, start, end, choices: placeholder.choices });
-					for (const inner of placeholder.inner) {
-						placeholders.push({
-							index: inner.index,
-							start: start + inner.start,
-							end: start + inner.end,
-						});
-					}
-					continue;
+				for (const inner of placeholder.inner) {
+					placeholders.push({
+						index: inner.index,
+						start: start + inner.start,
+						end: start + inner.end,
+					});
 				}
+				for (const variable of placeholder.variables) {
+					variables.push({
+						name: variable.name,
+						start: start + variable.start,
+						end: start + variable.end,
+						defaultValue: variable.defaultValue,
+					});
+				}
+				continue;
+			}
 
 				const variable = this.parseVariable();
 				if (variable) {
@@ -212,6 +221,20 @@ class SnippetBodyParser {
 			return null;
 		}
 
+		const buildPlaceholder = (
+			index: number,
+			text: string,
+			inner: ParsedPlaceholderRange[] = [],
+			variables: ParsedVariableRange[] = [],
+			choices?: string[]
+		): PlaceholderParseResult => ({
+			index,
+			text,
+			inner,
+			variables,
+			choices,
+		});
+
 		const ch = this.source[this.index];
 		if (this.isDigit(ch)) {
 			const digits = this.readNumber();
@@ -219,11 +242,7 @@ class SnippetBodyParser {
 				this.index = startIndex;
 				return null;
 			}
-			return {
-				index: parseInt(digits, 10),
-				text: '',
-				inner: [],
-			};
+			return buildPlaceholder(parseInt(digits, 10), '');
 		}
 
 		if (ch !== '{') {
@@ -241,7 +260,7 @@ class SnippetBodyParser {
 
 		if (this.source[this.index] === '}') {
 			this.index++;
-			return { index: placeholderIndex, text: '', inner: [] };
+			return buildPlaceholder(placeholderIndex, '');
 		}
 
 		if (this.source[this.index] === '|') {
@@ -256,12 +275,7 @@ class SnippetBodyParser {
 				return null;
 			}
 			this.index++;
-			return {
-				index: placeholderIndex,
-				text: choices[0] ?? '',
-				inner: [],
-				choices,
-			};
+			return buildPlaceholder(placeholderIndex, choices[0] ?? '', [], [], choices);
 		}
 
 		if (this.source[this.index] === ':') {
@@ -271,16 +285,17 @@ class SnippetBodyParser {
 				this.index = startIndex;
 				return null;
 			}
-			return {
-				index: placeholderIndex,
-				text: segment.text,
-				inner: segment.placeholders,
-			};
+			return buildPlaceholder(
+				placeholderIndex,
+				segment.text,
+				segment.placeholders,
+				segment.variables
+			);
 		}
 
 		if (this.source[this.index] === '}') {
 			this.index++;
-			return { index: placeholderIndex, text: '', inner: [] };
+			return buildPlaceholder(placeholderIndex, '');
 		}
 
 		this.index = startIndex;
