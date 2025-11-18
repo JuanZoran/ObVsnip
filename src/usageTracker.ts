@@ -13,8 +13,11 @@ export const incrementUsageCount = (
 export const usageRecordToMap = (
 	usage: Record<string, number> | undefined
 ): Map<string, number> => {
-	const entries = usage
-		? Object.entries(usage).map(([key, value]) => [key, value ?? 0])
+	const entries: [string, number][] = usage
+		? Object.entries(usage).map(([key, value]) => [
+				key,
+				value ?? 0,
+		  ])
 		: [];
 	return new Map(entries);
 };
