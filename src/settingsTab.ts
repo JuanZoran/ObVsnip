@@ -132,10 +132,19 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 	}
 
 	private createSettingsSection(): void {
-		const { containerEl } = this;
 		const strings = this.plugin.getStrings().settings;
-		containerEl.createEl("h3", { text: strings.triggerSection });
+		this.renderTriggerSettings(strings);
+		this.renderPickerSettings(strings);
+		this.renderRankingSettings(strings);
+		this.renderVirtualTextSettings(strings);
+		this.renderDebugSettings(strings);
+	}
 
+	private renderTriggerSettings(
+		strings: ReturnType<TextSnippetsPlugin["getStrings"]>["settings"]
+	): void {
+		const { containerEl } = this;
+		containerEl.createEl("h3", { text: strings.triggerSection });
 		new Setting(containerEl)
 			.setName(strings.triggerName)
 			.setDesc(strings.triggerDesc)
@@ -149,7 +158,12 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 						this.plugin.applyRuntimeSettings();
 					})
 			);
+	}
 
+	private renderPickerSettings(
+		strings: ReturnType<TextSnippetsPlugin["getStrings"]>["settings"]
+	): void {
+		const { containerEl } = this;
 		containerEl.createEl("h3", { text: strings.pickerSection });
 		containerEl.createEl("p", {
 			text: strings.pickerHint,
@@ -182,10 +196,20 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 			strings.menuKeys.toggleDesc,
 			"Mod-Shift-S"
 		);
+	}
 
+	private renderRankingSettings(
+		strings: ReturnType<TextSnippetsPlugin["getStrings"]>["settings"]
+	): void {
+		const { containerEl } = this;
 		this.renderRankingAlgorithmSettings(containerEl, strings);
 		this.renderRankingPreview(containerEl, strings);
+	}
 
+	private renderVirtualTextSettings(
+		strings: ReturnType<TextSnippetsPlugin["getStrings"]>["settings"]
+	): void {
+		const { containerEl } = this;
 		containerEl.createEl("h3", { text: strings.virtualSection });
 
 		new Setting(containerEl)
@@ -228,6 +252,7 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 				this.updateVirtualPreviewStyles();
 			}
 		);
+
 		this.addColorSetting(
 			containerEl,
 			strings.choiceInactiveName,
@@ -240,6 +265,7 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 				this.updateVirtualPreviewStyles();
 			}
 		);
+
 		this.addColorSetting(
 			containerEl,
 			strings.placeholderActiveName,
@@ -252,6 +278,7 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 				this.updateVirtualPreviewStyles();
 			}
 		);
+
 		this.addColorSetting(
 			containerEl,
 			strings.ghostTextName,
@@ -264,9 +291,22 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 				this.updateVirtualPreviewStyles();
 			}
 		);
-		this.renderVirtualTextPreview(containerEl, strings);
 
+		this.renderVirtualTextPreview(containerEl, strings);
+	}
+
+	private renderDebugSettings(
+		strings: ReturnType<TextSnippetsPlugin["getStrings"]>["settings"]
+	): void {
+		const { containerEl } = this;
 		containerEl.createEl("h3", { text: strings.debugSection });
+
+		const modulesWrapper = containerEl.createDiv();
+		this.renderDebugModuleSettings(modulesWrapper, strings);
+		this.toggleDebugModuleControls(
+			modulesWrapper,
+			this.plugin.settings.enableDebugLogs
+		);
 
 		new Setting(containerEl)
 			.setName(strings.debugName)
@@ -281,13 +321,6 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 						this.toggleDebugModuleControls(modulesWrapper, value);
 					})
 			);
-
-		const modulesWrapper = containerEl.createDiv();
-		this.renderDebugModuleSettings(modulesWrapper, strings);
-		this.toggleDebugModuleControls(
-			modulesWrapper,
-			this.plugin.settings.enableDebugLogs
-		);
 
 		new Setting(containerEl)
 			.setName(strings.variableHelpName)
