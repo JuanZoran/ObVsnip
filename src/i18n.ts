@@ -50,6 +50,8 @@ export interface LocaleStrings {
 		placeholderActiveDesc: string;
 		ghostTextName: string;
 		ghostTextDesc: string;
+		virtualPreviewTitle: string;
+		virtualPreviewDesc: string;
 		debugSection: string;
 		debugName: string;
 		debugDesc: string;
@@ -134,6 +136,15 @@ const translations: Record<LocaleKey, LocaleStrings> = {
 			ghostTextName: "Ghost text color",
 			ghostTextDesc:
 				"Control the color of ghost tags like the next tab stop indicator.",
+			virtualPreviewTitle: "Preview",
+			virtualPreviewDesc:
+				"Sample snippet showing how your highlight colors will look.",
+				virtualPreviewTitle: "Preview",
+				virtualPreviewDesc:
+					"Sample snippet that uses your current highlight colors.",
+			virtualPreviewTitle: "Preview",
+			virtualPreviewDesc:
+				"Sample snippet showing how your highlight colors will look.",
 			debugSection: "🛠️ Debugging",
 			debugName: "Enable debug mode",
 			debugDesc: "Print diagnostic information to the developer console.",
@@ -234,6 +245,8 @@ const translations: Record<LocaleKey, LocaleStrings> = {
 			placeholderActiveDesc: "自定义当前占位符的高亮色。",
 			ghostTextName: "幽灵文本颜色",
 			ghostTextDesc: "控制下一步/跳转提示等幽灵文本的颜色。",
+			virtualPreviewTitle: "预览",
+			virtualPreviewDesc: "示例展示当前设置下的虚拟文本颜色。",
 			debugSection: "🛠️ 调试",
 			debugName: "开启调试模式",
 			debugDesc: "在开发者控制台输出诊断信息。",

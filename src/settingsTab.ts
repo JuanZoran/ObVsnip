@@ -239,6 +239,7 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 				this.plugin.applyRuntimeSettings();
 			}
 		);
+		this.renderVirtualTextPreview(containerEl, strings);
 
 		containerEl.createEl("h3", { text: strings.debugSection });
 
@@ -624,7 +625,44 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 					.setValue(value)
 					.onChange(onChange);
 				text.inputEl.setAttribute("type", "color");
+		});
+	}
+
+	private renderVirtualTextPreview(
+		containerEl: HTMLElement,
+		strings: ReturnType<TextSnippetsPlugin["getStrings"]>["settings"]
+	): void {
+		const wrapper = containerEl.createDiv({ cls: "virtual-text-preview" });
+		wrapper.createEl("div", {
+			text: strings.virtualPreviewTitle,
+			cls: "virtual-preview-title",
+		});
+		wrapper.createEl("div", {
+			text: strings.virtualPreviewDesc,
+			cls: "virtual-preview-desc",
+		});
+		const snippet = wrapper.createDiv({ cls: "virtual-preview-snippet" });
+		const placeholder = snippet.createSpan({
+			cls: "preview-placeholder",
+			text: "李洪昆",
+		});
+		snippet.createTextNode("⚙️ ");
+		const choices = snippet.createSpan({
+			cls: "preview-choice-list",
+		});
+		["李洪昆", "刘栋", "王思凡"].forEach((choice, index) => {
+			const entry = choices.createSpan({
+				cls: "snippet-choice-entry",
+				text: choice,
 			});
+			if (choice === "王思凡") {
+				entry.classList.add("snippet-choice-entry-active");
+			}
+			if (index < 2) {
+				choices.appendChild(document.createTextNode("/"));
+			}
+		});
+		snippet.createTextNode("，你好！$0");
 	}
 
 	private async handleReloadSnippets(): Promise<void> {
