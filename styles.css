@@ -35,6 +35,24 @@ If your plugin does not need CSS, delete this file.
 	color: var(--snippet-ghost-text-color, var(--text-muted));
 }
 
+.snippet-choice-hint-icon {
+	opacity: 0.75;
+	margin-right: 0.25em;
+}
+
+.snippet-choice-hint-list {
+	display: inline;
+}
+
+.snippet-choice-entry {
+	margin: 0 1px;
+}
+
+.snippet-choice-entry-active {
+	color: var(--interactive-accent);
+	font-weight: 600;
+}
+
 .snippet-choice-hint-active {
 	color: var(--snippet-placeholder-active-color, rgba(86, 156, 214, 0.7));
 	font-weight: 600;

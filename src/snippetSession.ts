@@ -99,26 +99,43 @@ class NextTabStopWidget extends WidgetType {
 export class ChoiceHintWidget extends WidgetType {
 	constructor(
 		private readonly hint: string,
-		private readonly choicesLabel?: string,
-		private readonly color?: string,
-		private readonly active?: boolean
+		private readonly choices: string[],
+		private readonly activeChoice?: string,
+		private readonly color?: string
 	) {
 		super();
 	}
 
 	toDOM(): HTMLElement {
-		const span = document.createElement('span');
-		span.className = 'snippet-choice-hint';
-		if (this.active) {
-			span.classList.add('snippet-choice-hint-active');
-		}
+		const wrapper = document.createElement('span');
+		wrapper.className = 'snippet-choice-hint';
 		if (this.color) {
-			span.style.color = this.color;
+			wrapper.style.color = this.color;
 		}
-		span.textContent = this.choicesLabel
-			? `${this.hint}: ${this.choicesLabel}`
-			: this.hint;
-		return span;
+
+		const iconEl = document.createElement('span');
+		iconEl.className = 'snippet-choice-hint-icon';
+		iconEl.textContent = this.hint;
+		wrapper.appendChild(iconEl);
+
+		const listEl = document.createElement('span');
+		listEl.className = 'snippet-choice-hint-list';
+
+		this.choices.forEach((choice, index) => {
+			const choiceEl = document.createElement('span');
+			choiceEl.className = 'snippet-choice-entry';
+			choiceEl.textContent = choice;
+			if (choice === this.activeChoice) {
+				choiceEl.classList.add('snippet-choice-entry-active');
+			}
+			listEl.appendChild(choiceEl);
+			if (index < this.choices.length - 1) {
+				listEl.appendChild(document.createTextNode('/'));
+			}
+		});
+
+		wrapper.appendChild(listEl);
+		return wrapper;
 	}
 
 	ignoreEvent(): boolean {
@@ -184,22 +201,22 @@ const buildDecorations = (state: EditorState): DecorationSet => {
 		});
 
 			if (isActive && stop.choices && stop.choices.length > 0) {
-				const choicesLabel = stop.choices.join('/');
+				const activeChoice = state.doc.sliceString(stop.start, stop.end);
 				const hintWidget = Decoration.widget({
 					side: 1,
 					widget: new ChoiceHintWidget(
 						'⚙️',
-						choicesLabel,
-						widgetConfig.color,
-						true
+						stop.choices,
+						activeChoice,
+						widgetConfig.color
 					),
 				});
-			pending.push({
-				from: stop.end,
-				to: stop.end,
-				deco: hintWidget,
-			});
-		}
+				pending.push({
+					from: stop.end,
+					to: stop.end,
+					deco: hintWidget,
+				});
+			}
 	}
 
 	let nextStop =
