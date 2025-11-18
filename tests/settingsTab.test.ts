@@ -83,24 +83,22 @@ const ensureDomHelpers = (): () => void => {
 	};
 };
 
-const createPluginMock = (
-	enableDebug: boolean
-): {
-	settings: TextSnippetsPlugin["settings"];
-	getStrings: TextSnippetsPlugin["getStrings"];
-	saveSettings: jest.Mock;
-	applyRuntimeSettings: jest.Mock;
-	getSnippetLoader: TextSnippetsPlugin["getSnippetLoader"];
-	getVirtualTextColorPresets: TextSnippetsPlugin["getVirtualTextColorPresets"];
-	saveVirtualTextColorPreset: TextSnippetsPlugin["saveVirtualTextColorPreset"];
-	applyVirtualTextColorPreset: TextSnippetsPlugin["applyVirtualTextColorPreset"];
-	resetVirtualTextColorsToDefaults: TextSnippetsPlugin["resetVirtualTextColorsToDefaults"];
-	previewVirtualTextInEditor: TextSnippetsPlugin["previewVirtualTextInEditor"];
-	getSelectedVirtualTextPresetName: TextSnippetsPlugin["getSelectedVirtualTextPresetName"];
-	getAvailableSnippets: TextSnippetsPlugin["getAvailableSnippets"];
-	getSnippetUsageCounts: TextSnippetsPlugin["getSnippetUsageCounts"];
-	getRankingAlgorithmNames: TextSnippetsPlugin["getRankingAlgorithmNames"];
-} => {
+	const createPluginMock = (
+		enableDebug: boolean
+	): {
+		settings: TextSnippetsPlugin["settings"];
+		getStrings: TextSnippetsPlugin["getStrings"];
+		saveSettings: jest.Mock;
+		applyRuntimeSettings: jest.Mock;
+		getSnippetLoader: TextSnippetsPlugin["getSnippetLoader"];
+		getVirtualTextColorPresets: TextSnippetsPlugin["getVirtualTextColorPresets"];
+		saveVirtualTextColorPreset: TextSnippetsPlugin["saveVirtualTextColorPreset"];
+		applyVirtualTextColorPreset: TextSnippetsPlugin["applyVirtualTextColorPreset"];
+		getSelectedVirtualTextPresetName: TextSnippetsPlugin["getSelectedVirtualTextPresetName"];
+		getAvailableSnippets: TextSnippetsPlugin["getAvailableSnippets"];
+		getSnippetUsageCounts: TextSnippetsPlugin["getSnippetUsageCounts"];
+		getRankingAlgorithmNames: TextSnippetsPlugin["getRankingAlgorithmNames"];
+	} => {
 	const settings: TextSnippetsPlugin["settings"] = {
 		snippetFiles: [],
 		showVirtualText: true,
@@ -136,8 +134,6 @@ const createPluginMock = (
 		getVirtualTextColorPresets: jest.fn().mockReturnValue([]),
 		saveVirtualTextColorPreset: jest.fn(),
 		applyVirtualTextColorPreset: jest.fn(),
-		resetVirtualTextColorsToDefaults: jest.fn(),
-		previewVirtualTextInEditor: jest.fn().mockReturnValue(true),
 		getSelectedVirtualTextPresetName: jest.fn().mockReturnValue(""),
 		getAvailableSnippets: jest.fn().mockReturnValue([]),
 		getSnippetUsageCounts: jest.fn().mockReturnValue(new Map()),

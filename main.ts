@@ -579,17 +579,6 @@ export default class TextSnippetsPlugin extends Plugin {
 		this.applyRuntimeSettings();
 	}
 
-	public resetVirtualTextColorsToDefaults(): void {
-		this.applyVirtualTextColorPreset({
-			name: "default",
-			...DEFAULT_COLOR_SCHEME,
-		});
-	}
-
-	public previewVirtualTextInEditor(): boolean {
-		return this.openSnippetMenu();
-	}
-
 	private reconfigureTriggerKeymap(): void {
 		const extension = this.createTriggerKeymapExtension();
 		const leaves = this.app.workspace.getLeavesOfType("markdown");
