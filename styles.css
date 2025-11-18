@@ -94,6 +94,30 @@ If your plugin does not need CSS, delete this file.
 	color: var(--text-accent);
 }
 
+.preview-placeholder-active {
+	padding: 0 3px;
+	margin-left: 4px;
+	border-radius: 2px;
+	background: var(
+		--snippet-placeholder-active-color,
+		rgba(86, 156, 214, 0.35)
+	);
+	color: var(--text-on-accent, #fff);
+	border: 1px solid
+		var(
+			--snippet-placeholder-active-color,
+			rgba(86, 156, 214, 0.35)
+		);
+}
+
+.preview-ghost-text {
+	color: var(
+		--snippet-ghost-text-color,
+		var(--text-muted, rgba(255, 255, 255, 0.65))
+	);
+	font-style: italic;
+}
+
 .snippet-choice-hint-active {
 	color: var(--snippet-placeholder-active-color, rgba(86, 156, 214, 0.7));
 	font-weight: 600;

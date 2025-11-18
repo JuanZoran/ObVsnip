@@ -11,13 +11,20 @@ jest.mock('../src/editorUtils', () => ({
 
 const createApp = () => ({ workspace: { getActiveViewOfType: () => null } }) as any;
 
-const createSnippet = (prefix: string, body: string, description?: string, priority?: number) => ({
+const createSnippet = (
+	prefix: string,
+	body: string,
+	description?: string,
+	priority?: number,
+	hide?: boolean
+) => ({
 	prefix,
 	body,
 	description,
 	processedText: body,
 	tabStops: [],
 	priority,
+	hide,
 });
 
 type DomHelperName = 'createEl' | 'createDiv' | 'createSpan' | 'empty' | 'toggleClass' | 'setText' | 'scrollIntoView';
@@ -219,5 +226,70 @@ describe('SnippetCompletionMenu UI flow', () => {
 
 		const titles = Array.from(document.querySelectorAll('.snippet-completion-title')).map((el) => el.textContent);
 		expect(titles).toContain(prefix);
+	});
+
+	it('skips hidden snippets when falling back to all snippets', () => {
+		snippets = [
+			createSnippet('hidden-snippet', 'body', 'Hidden', undefined, true),
+			createSnippet('visible-snippet', 'body', 'Visible'),
+		];
+		menu = new SnippetCompletionMenu(createApp(), {
+			getSnippets: () => snippets,
+			manager,
+			logger: new PluginLogger(),
+			getRankingAlgorithms: () => cloneDefaultRanking(),
+			getUsageCounts: () => new Map(),
+		});
+
+		expect(menu.open(editor as any, 'none')).toBe(true);
+
+		const titles = Array.from(
+			document.querySelectorAll('.snippet-completion-title')
+		).map((el) => el.textContent);
+
+		expect(titles).toEqual(['visible-snippet']);
+
+		menu.close();
+	});
+
+	it('filters out matching hidden snippets even when query matches them', () => {
+		snippets = [
+			createSnippet('hidden-snippet', 'body', 'Hidden', undefined, true),
+			createSnippet('visible-snippet', 'body', 'Visible'),
+		];
+		menu = new SnippetCompletionMenu(createApp(), {
+			getSnippets: () => snippets,
+			manager,
+			logger: new PluginLogger(),
+			getRankingAlgorithms: () => cloneDefaultRanking(),
+			getUsageCounts: () => new Map(),
+		});
+
+		expect(menu.open(editor as any, 'hidden-snippet')).toBe(true);
+
+		const titles = Array.from(
+			document.querySelectorAll('.snippet-completion-title')
+		).map((el) => el.textContent);
+
+		expect(titles).toEqual(['visible-snippet']);
+
+		menu.close();
+	});
+
+	it('fails to open when every snippet is hidden', () => {
+		snippets = [
+			createSnippet('hidden-one', 'body', 'Hidden', undefined, true),
+			createSnippet('hidden-two', 'body', 'Hidden two', undefined, true),
+		];
+		menu = new SnippetCompletionMenu(createApp(), {
+			getSnippets: () => snippets,
+			manager,
+			logger: new PluginLogger(),
+			getRankingAlgorithms: () => cloneDefaultRanking(),
+			getUsageCounts: () => new Map(),
+		});
+
+		expect(menu.open(editor as any, '')).toBe(false);
+		expect(document.querySelector('.snippet-completion-menu')).toBeNull();
 	});
 });

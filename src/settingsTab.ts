@@ -198,6 +198,19 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 
 		this.addColorSetting(
 			containerEl,
+			strings.placeholderColorName,
+			strings.placeholderColorDesc,
+			this.plugin.settings.virtualTextColor,
+			async (value) => {
+				this.plugin.settings.virtualTextColor = value || "";
+				await this.plugin.saveSettings();
+				this.plugin.applyRuntimeSettings();
+				this.updateVirtualPreviewStyles();
+			}
+		);
+
+		this.addColorSetting(
+			containerEl,
 			strings.choiceHighlightName,
 			strings.choiceHighlightDesc,
 			this.plugin.settings.choiceHighlightColor,
@@ -661,25 +674,39 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 		const snippet = wrapper.createDiv({ cls: "virtual-preview-snippet" });
 		const placeholder = snippet.createSpan({
 			cls: "preview-placeholder",
-			text: "李洪昆",
+			text: strings.virtualPreviewSamplePlaceholder,
+		});
+		const placeholderActive = snippet.createSpan({
+			cls: "preview-placeholder-active",
+			text: strings.virtualPreviewSampleActivePlaceholder,
 		});
 		snippet.appendChild(document.createTextNode("⚙️ "));
 		const choices = snippet.createSpan({
 			cls: "preview-choice-list",
 		});
-		["李洪昆", "刘栋", "王思凡"].forEach((choice, index) => {
+		const sampleChoices =
+			strings.virtualPreviewSampleChoices.length > 0
+				? strings.virtualPreviewSampleChoices
+				: ["Option A", "Option B", "Option C"];
+		sampleChoices.forEach((choice, index) => {
 			const entry = choices.createSpan({
 				cls: "snippet-choice-entry",
 				text: choice,
 			});
-			if (choice === "王思凡") {
+			if (index === sampleChoices.length - 1) {
 				entry.classList.add("snippet-choice-entry-active");
 			}
-			if (index < 2) {
+			if (index < sampleChoices.length - 1) {
 				choices.appendChild(document.createTextNode("/"));
 			}
 		});
-		snippet.appendChild(document.createTextNode("，你好！$0"));
+		const ghostTextSpan = snippet.createSpan({
+			cls: "preview-ghost-text",
+			text: strings.virtualPreviewSampleGreeting,
+		});
+		snippet.appendChild(ghostTextSpan);
+		this.virtualPreviewSnippet = snippet;
+		this.updateVirtualPreviewStyles();
 	}
 
 	private async handleReloadSnippets(): Promise<void> {

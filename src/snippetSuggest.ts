@@ -194,10 +194,14 @@ export class SnippetCompletionMenu {
 		return true;
 	}
 
+	private getVisibleSnippets(): ParsedSnippet[] {
+		return this.options.getSnippets().filter((snippet) => !snippet.hide);
+	}
+
 	private filterSnippets(query: string): ParsedSnippet[] {
 		const normalized = query.trim().toLowerCase();
 
-		const snippets = this.options.getSnippets().filter((snippet) => !snippet.hide);
+		const snippets = this.getVisibleSnippets();
 
 		if (!normalized) {
 			return snippets;
@@ -717,14 +721,14 @@ export class SnippetCompletionMenu {
 			return true;
 		}
 
-		const allSnippets = this.options.getSnippets();
-		if (allSnippets.length === 0) {
+		const visibleSnippets = this.getVisibleSnippets();
+		if (visibleSnippets.length === 0) {
 			this.entries = [];
 			this.emptyStateMessage = null;
 			return false;
 		}
 
-		this.entries = rankSnippets(allSnippets, algorithms, rankingContext);
+		this.entries = rankSnippets(visibleSnippets, algorithms, rankingContext);
 		const displayQuery = query ?? "";
 		this.emptyStateMessage = displayQuery
 			? `No snippets match "${displayQuery}". Showing all snippets.`

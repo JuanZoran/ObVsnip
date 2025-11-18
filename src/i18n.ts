@@ -42,6 +42,8 @@ export interface LocaleStrings {
 		virtualSection: string;
 		showHintsName: string;
 		showHintsDesc: string;
+		placeholderColorName: string;
+		placeholderColorDesc: string;
 		choiceHighlightName: string;
 		choiceHighlightDesc: string;
 		choiceInactiveName: string;
@@ -52,6 +54,10 @@ export interface LocaleStrings {
 		ghostTextDesc: string;
 		virtualPreviewTitle: string;
 		virtualPreviewDesc: string;
+		virtualPreviewSamplePlaceholder: string;
+		virtualPreviewSampleChoices: string[];
+		virtualPreviewSampleGreeting: string;
+		virtualPreviewSampleActivePlaceholder: string;
 		debugSection: string;
 		debugName: string;
 		debugDesc: string;
@@ -124,6 +130,8 @@ const translations: Record<LocaleKey, LocaleStrings> = {
 			virtualSection: "👻 Virtual text",
 				showHintsName: "Show tab stop hints",
 			showHintsDesc: "Display ghost-text previews at the next tab stop.",
+			placeholderColorName: "Placeholder color",
+			placeholderColorDesc: "Define the color used by inline placeholder previews.",
 			choiceHighlightName: "Choice highlight color",
 			choiceHighlightDesc: "Override the color used to emphasize the currently selected choice caption.",
 			choiceInactiveName: "Choice inactive color",
@@ -134,6 +142,10 @@ const translations: Record<LocaleKey, LocaleStrings> = {
 			ghostTextDesc: "Control the color of ghost tags like the next tab stop indicator.",
 			virtualPreviewTitle: "Preview",
 			virtualPreviewDesc: "Sample snippet showing how your highlight colors will look.",
+			virtualPreviewSamplePlaceholder: "Preview placeholder",
+			virtualPreviewSampleChoices: ["Option A", "Option B", "Option C"],
+			virtualPreviewSampleGreeting: " — Hello world, $0",
+			virtualPreviewSampleActivePlaceholder: "Active placeholder",
 		debugSection: "🛠️ Debugging",
 			debugName: "Enable debug mode",
 			debugDesc: "Print diagnostic information to the developer console.",
@@ -222,10 +234,12 @@ const translations: Record<LocaleKey, LocaleStrings> = {
 				"开启后可拖动以调整优先级。",
 			rankingAlgorithmDisabledDesc:
 				"关闭时会固定在底部无法拖动。",
-			virtualSection: "👻 Virtual text",
-				showHintsName: "显示占位符提示",
-				showHintsDesc: "在下一个占位符位置显示 Virtual text 提示。",
-				choiceHighlightName: "选择高亮颜色",
+				virtualSection: "👻 Virtual text",
+					showHintsName: "显示占位符提示",
+					showHintsDesc: "在下一个占位符位置显示 Virtual text 提示。",
+					placeholderColorName: "占位符颜色",
+					placeholderColorDesc: "设置预览占位符的颜色。",
+					choiceHighlightName: "选择高亮颜色",
 				choiceHighlightDesc: "设置强调当前选择项的颜色，方便在文本中快速识别。",
 				choiceInactiveName: "非选中项颜色",
 				choiceInactiveDesc: "未选中的 choice 使用此颜色显示。",
@@ -233,8 +247,12 @@ const translations: Record<LocaleKey, LocaleStrings> = {
 				placeholderActiveDesc: "自定义当前占位符的高亮色。",
 				ghostTextName: "幽灵文本颜色",
 				ghostTextDesc: "控制下一个跳转提示等幽灵文本的颜色。",
-				virtualPreviewTitle: "预览",
-				virtualPreviewDesc: "示例显示当前配置下的虚拟文本颜色。",
+					virtualPreviewTitle: "预览",
+					virtualPreviewDesc: "示例显示当前配置下的虚拟文本颜色。",
+					virtualPreviewSamplePlaceholder: "示例占位符",
+					virtualPreviewSampleChoices: ["选项一", "选项二", "选项三"],
+					virtualPreviewSampleGreeting: " — 你好，$0",
+					virtualPreviewSampleActivePlaceholder: "活跃占位符",
 			debugSection: "🛠️ 调试",
 			debugName: "开启调试模式",
 			debugDesc: "在开发者控制台输出诊断信息。",
