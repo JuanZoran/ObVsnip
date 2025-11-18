@@ -44,6 +44,12 @@ export interface LocaleStrings {
 		showHintsDesc: string;
 		choiceHighlightName: string;
 		choiceHighlightDesc: string;
+		choiceInactiveName: string;
+		choiceInactiveDesc: string;
+		placeholderActiveName: string;
+		placeholderActiveDesc: string;
+		ghostTextName: string;
+		ghostTextDesc: string;
 		debugSection: string;
 		debugName: string;
 		debugDesc: string;
