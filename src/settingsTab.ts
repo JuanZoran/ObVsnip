@@ -8,10 +8,18 @@ import {
 	Modal,
 } from "obsidian";
 import type TextSnippetsPlugin from "../main";
-import type { SnippetMenuKeymap } from "./types";
+import type {
+	RankingAlgorithmId,
+	RankingAlgorithmSetting,
+	SnippetMenuKeymap,
+} from "./types";
 import type { DebugCategory } from "./logger";
-import type { SnippetSortMode } from "./snippetSuggest";
 import { BUILTIN_VARIABLES } from "./snippetBody";
+import {
+	moveEnabledAlgorithm,
+	normalizeRankingAlgorithms,
+	toggleAlgorithmEnabled,
+} from "./rankingConfig";
 
 const DEBUG_CATEGORY_KEYS: DebugCategory[] = [
 	"general",
@@ -72,6 +80,8 @@ class VariableHelpModal extends Modal {
 
 export class TextSnippetsSettingsTab extends PluginSettingTab {
 	private plugin: TextSnippetsPlugin;
+	private rankingListWrapper: HTMLElement | null = null;
+	private draggedAlgorithmId: RankingAlgorithmId | null = null;
 
 	constructor(app: App, plugin: TextSnippetsPlugin) {
 		super(app, plugin);
@@ -168,20 +178,7 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 			"Mod-Shift-S"
 		);
 
-		new Setting(containerEl)
-			.setName(strings.sortName)
-			.setDesc(strings.sortDesc)
-			.addDropdown((dropdown) =>
-				dropdown
-					.addOption("smart", strings.sortOptions.smart)
-					.addOption("prefix-length", strings.sortOptions.length)
-					.addOption("none", strings.sortOptions.none)
-					.setValue(this.plugin.settings.menuSortMode)
-					.onChange(async (value) => {
-						this.plugin.settings.menuSortMode = value as SnippetSortMode;
-						await this.plugin.saveSettings();
-					})
-			);
+		this.renderRankingAlgorithmSettings(containerEl, strings);
 
 		containerEl.createEl("h3", { text: strings.virtualSection });
 
@@ -220,12 +217,20 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 			modulesWrapper,
 			this.plugin.settings.enableDebugLogs
 		);
+
+		new Setting(containerEl)
+			.setName(strings.variableHelpName)
+			.setDesc(strings.variableHelpDesc)
+			.addButton((btn) =>
+				btn.setButtonText("ℹ️").onClick(() => this.showVariableHelp())
+			);
 	}
 
 	private renderDebugModuleSettings(
 		containerEl: HTMLElement,
 		strings: ReturnType<TextSnippetsPlugin["getStrings"]>["settings"]
 	): void {
+		containerEl.addClass("debug-modules-wrapper");
 		new Setting(containerEl)
 			.setName(strings.debugCategoriesName)
 			.setDesc(strings.debugCategoriesDesc);
@@ -233,6 +238,7 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 		const categoryLabels = strings.debugCategoryOptions;
 		DEBUG_CATEGORY_KEYS.forEach((key) => {
 			new Setting(containerEl)
+				.setClass("debug-module-item")
 				.setName(categoryLabels[key])
 				.addToggle((toggle) =>
 					toggle
@@ -256,13 +262,6 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 						})
 				);
 		});
-
-		new Setting(containerEl)
-			.setName(strings.variableHelpName)
-			.setDesc(strings.variableHelpDesc)
-			.addButton((btn) =>
-				btn.setButtonText("ℹ️").onClick(() => this.showVariableHelp())
-			);
 	}
 
 	private toggleDebugModuleControls(
@@ -270,6 +269,172 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 		enabled: boolean
 	): void {
 		container.style.display = enabled ? "" : "none";
+	}
+
+	private renderRankingAlgorithmSettings(
+		containerEl: HTMLElement,
+		strings: ReturnType<TextSnippetsPlugin["getStrings"]>["settings"]
+	): void {
+		containerEl.createEl("h3", { text: strings.rankingSection });
+		containerEl.createEl("p", {
+			text: strings.rankingSectionDesc,
+			cls: "setting-item-description",
+		});
+		containerEl.createEl("p", {
+			text: strings.rankingStableNote,
+			cls: "setting-item-description",
+		});
+		this.rankingListWrapper = containerEl.createDiv({
+			cls: "ranking-algorithms-list",
+		});
+		this.renderRankingAlgorithmRows(strings);
+	}
+
+	private renderRankingAlgorithmRows(
+		strings: ReturnType<TextSnippetsPlugin["getStrings"]>["settings"]
+	): void {
+		if (!this.rankingListWrapper) return;
+		this.rankingListWrapper.empty();
+		const normalized = normalizeRankingAlgorithms(
+			this.plugin.settings.rankingAlgorithms
+		);
+		this.plugin.settings.rankingAlgorithms = normalized;
+		const enabledCount = normalized.filter((entry) => entry.enabled).length;
+		for (const entry of normalized) {
+			this.renderRankingAlgorithmRow(entry, strings, enabledCount);
+		}
+	}
+
+	private renderRankingAlgorithmRow(
+		entry: RankingAlgorithmSetting,
+		strings: ReturnType<TextSnippetsPlugin["getStrings"]>["settings"],
+		enabledCount: number
+	): void {
+		const row = new Setting(this.rankingListWrapper!)
+			.setName(strings.rankingAlgorithmNames[entry.id])
+			.setDesc(
+				entry.enabled
+					? strings.rankingAlgorithmEnabledDesc
+					: strings.rankingAlgorithmDisabledDesc
+			)
+			.addToggle((toggle) => {
+				toggle
+					.setValue(entry.enabled)
+					.setDisabled(entry.enabled && enabledCount <= 1)
+					.onChange(async (value) => {
+						this.plugin.settings.rankingAlgorithms =
+							toggleAlgorithmEnabled(
+								this.plugin.settings.rankingAlgorithms,
+								entry.id,
+								value
+							);
+						await this.plugin.saveSettings();
+						this.renderRankingAlgorithmRows(strings);
+					});
+			});
+
+		const rowEl = row.settingEl;
+		rowEl.setAttr("draggable", entry.enabled ? "true" : "false");
+		rowEl.setAttr("data-algo-id", entry.id);
+		rowEl.setAttr("data-enabled", entry.enabled ? "true" : "false");
+		rowEl.addClass("ranking-algo-item");
+		if (!entry.enabled) {
+			rowEl.addClass("ranking-algo-disabled");
+		}
+
+		rowEl.addEventListener("dragstart", (event) =>
+			this.handleRankingDragStart(event, entry)
+		);
+		rowEl.addEventListener("dragover", (event) =>
+			this.handleRankingDragOver(event, entry)
+		);
+		rowEl.addEventListener("drop", (event) =>
+			this.handleRankingDrop(event, entry, strings)
+		);
+		rowEl.addEventListener("dragend", () =>
+			this.handleRankingDragEnd()
+		);
+
+		const handle = rowEl.createSpan({
+			cls: "ranking-algo-handle",
+			text: "⋮⋮",
+		});
+		rowEl.insertBefore(handle, rowEl.firstChild);
+	}
+
+	private handleRankingDragStart(
+		event: DragEvent,
+		algorithm: RankingAlgorithmSetting
+	): void {
+		if (!algorithm.enabled) {
+			event.preventDefault();
+			return;
+		}
+		this.draggedAlgorithmId = algorithm.id;
+		event.dataTransfer?.setData("text/plain", algorithm.id);
+		event.dataTransfer?.setDragImage(new Image(), 0, 0);
+	}
+
+	private handleRankingDragOver(
+		event: DragEvent,
+		algorithm: RankingAlgorithmSetting
+	): void {
+		if (
+			!this.draggedAlgorithmId ||
+			!algorithm.enabled ||
+			this.draggedAlgorithmId === algorithm.id
+		) {
+			return;
+		}
+		event.preventDefault();
+		if (event.dataTransfer) {
+			event.dataTransfer.dropEffect = "move";
+		}
+	}
+
+	private handleRankingDrop(
+		event: DragEvent,
+		target: RankingAlgorithmSetting,
+		strings: ReturnType<TextSnippetsPlugin["getStrings"]>["settings"]
+	): void {
+		event.preventDefault();
+		if (
+			!this.draggedAlgorithmId ||
+			!target.enabled ||
+			this.draggedAlgorithmId === target.id
+		) {
+			return;
+		}
+		const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+		const insertAfter =
+			event.clientY > rect.top + rect.height / 2;
+		void this.applyRankingReorder(
+			this.draggedAlgorithmId,
+			target.id,
+			insertAfter,
+			strings
+		);
+		this.draggedAlgorithmId = null;
+	}
+
+	private handleRankingDragEnd(): void {
+		this.draggedAlgorithmId = null;
+	}
+
+	private async applyRankingReorder(
+		sourceId: RankingAlgorithmId,
+		targetId: RankingAlgorithmId,
+		insertAfter: boolean,
+		strings: ReturnType<TextSnippetsPlugin["getStrings"]>["settings"]
+	): Promise<void> {
+		this.plugin.settings.rankingAlgorithms = moveEnabledAlgorithm(
+			this.plugin.settings.rankingAlgorithms,
+			sourceId,
+			targetId,
+			insertAfter
+		);
+		await this.plugin.saveSettings();
+		this.renderRankingAlgorithmRows(strings);
 	}
 
 	private showVariableHelp(): void {

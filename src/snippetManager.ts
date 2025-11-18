@@ -24,8 +24,17 @@ type JumpCandidate = {
     stop: SnippetSessionStop;
 };
 
+type SnippetManagerOptions = {
+    onSnippetApplied?: (snippet: ParsedSnippet) => void;
+};
+
 export class SnippetManager {
-	constructor(private app: App, private snippetEngine: SnippetEngine, private logger: PluginLogger) {}
+	constructor(
+		private app: App,
+		private snippetEngine: SnippetEngine,
+		private logger: PluginLogger,
+		private options?: SnippetManagerOptions
+	) {}
 
     expandSnippet(): boolean {
         const editor = getActiveEditor(this.app);
@@ -216,19 +225,20 @@ export class SnippetManager {
 		const baseOffset = editor.posToOffset(startPos);
 		const positiveStops = tabStops.filter((t) => t.index > 0);
 		const firstTabStop = positiveStops.sort((a, b) => a.index - b.index)[0];
-		if (!firstTabStop) {
-			const zeroStop = tabStops.find((stop) => stop.index === 0);
-			const targetOffset =
-				zeroStop?.start !== undefined
-					? baseOffset + zeroStop.start
-					: baseOffset + text.length;
-			editor.setCursor(editor.offsetToPos(targetOffset));
-			this.logger.debug(
-				"manager",
-				"Snippet expanded without tab stops; staying in normal mode."
-			);
-			return true;
-		}
+        if (!firstTabStop) {
+            const zeroStop = tabStops.find((stop) => stop.index === 0);
+            const targetOffset =
+                zeroStop?.start !== undefined
+                    ? baseOffset + zeroStop.start
+                    : baseOffset + text.length;
+            editor.setCursor(editor.offsetToPos(targetOffset));
+            this.logger.debug(
+                "manager",
+                "Snippet expanded without tab stops; staying in normal mode."
+            );
+            this.notifySnippetApplied(snippet);
+            return true;
+        }
 
         const firstStopAbsolute: SnippetSessionStop = {
             index: firstTabStop.index,
@@ -239,6 +249,7 @@ export class SnippetManager {
         this.pushSnippetSession(editor, baseOffset, tabStops, firstTabStop.index);
 
         this.logger.debug("manager", `✨ Expanded snippet: ${snippet.prefix} | Entered snippet mode`);
+        this.notifySnippetApplied(snippet);
         return true;
     }
 
@@ -282,12 +293,16 @@ export class SnippetManager {
         };
     }
 
-    getAvailableSnippets(): ParsedSnippet[] {
-        return this.snippetEngine.getSnippets();
-    }
+	getAvailableSnippets(): ParsedSnippet[] {
+		return this.snippetEngine.getSnippets();
+	}
 
-    cycleChoiceAtCurrentStop(): boolean {
-        const editor = getActiveEditor(this.app);
+	private notifySnippetApplied(snippet: ParsedSnippet): void {
+		this.options?.onSnippetApplied?.(snippet);
+	}
+
+	cycleChoiceAtCurrentStop(): boolean {
+		const editor = getActiveEditor(this.app);
         if (!editor) return false;
 
         const session = this.getCurrentSession(editor);

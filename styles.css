@@ -105,3 +105,57 @@ If your plugin does not need CSS, delete this file.
 	padding: 6px 8px;
 	border-radius: var(--radius-s);
 }
+
+.ranking-algorithms-list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin-top: 6px;
+}
+
+.ranking-algo-item {
+	position: relative;
+	padding-left: 32px;
+	border-radius: var(--radius-m);
+	border: 1px solid transparent;
+	background: var(--background-secondary);
+	transition: border 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ranking-algo-item[data-enabled="true"] {
+	border-color: var(--background-modifier-border);
+}
+
+.ranking-algo-item[data-enabled="false"] {
+	opacity: 0.6;
+	background: var(--background-primary);
+}
+
+.ranking-algo-handle {
+	position: absolute;
+	left: 8px;
+	top: 50%;
+	transform: translateY(-50%);
+	cursor: grab;
+	font-size: 0.9em;
+	color: var(--text-muted);
+}
+
+.ranking-algo-item[data-enabled="false"] .ranking-algo-handle {
+	visibility: hidden;
+}
+
+.debug-modules-wrapper {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	margin-top: 8px;
+	padding-left: 12px;
+	border-left: 3px solid var(--interactive-accent);
+}
+
+.debug-module-item {
+	border: 1px solid transparent;
+	border-radius: var(--radius-s);
+	padding-left: 8px;
+}

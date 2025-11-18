@@ -64,3 +64,15 @@ export interface SnippetMenuKeymap {
 	accept: string;
 	toggle: string;
 }
+
+export type RankingAlgorithmId =
+	| "fuzzy-match"
+	| "prefix-length"
+	| "alphabetical"
+	| "usage-frequency"
+	| "original-order";
+
+export interface RankingAlgorithmSetting {
+	id: RankingAlgorithmId;
+	enabled: boolean;
+}

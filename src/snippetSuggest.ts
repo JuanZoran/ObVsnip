@@ -1,6 +1,11 @@
 import { App, Editor, type EditorPosition } from "obsidian";
+import { rankSnippets } from "./snippetRankingPipeline";
 
-import type { ParsedSnippet, PrefixInfo } from "./types";
+import type {
+	ParsedSnippet,
+	PrefixInfo,
+	RankingAlgorithmSetting,
+} from "./types";
 
 import { SnippetManager } from "./snippetManager";
 
@@ -9,8 +14,6 @@ import { PluginLogger } from "./logger";
 import { getActiveEditor, getEditorView } from "./editorUtils";
 import { getContextBeforeCursor } from "./prefixContext";
 
-export type SnippetSortMode = "none" | "smart" | "prefix-length";
-
 interface SnippetMenuOptions {
 	getSnippets: () => ParsedSnippet[];
 
@@ -18,9 +21,21 @@ interface SnippetMenuOptions {
 
 	logger: PluginLogger;
 
-	getSortMode: () => SnippetSortMode;
+	getRankingAlgorithms: () => RankingAlgorithmSetting[];
+	getUsageCounts?: () => Map<string, number>;
 	getPrefixInfo?: () => PrefixInfo;
 }
+
+const matchesFuzzy = (source: string, query: string): boolean => {
+	if (!query) return false;
+	let position = 0;
+	for (const char of query) {
+		position = source.indexOf(char, position);
+		if (position < 0) return false;
+		position += 1;
+	}
+	return true;
+};
 
 export class SnippetCompletionMenu {
 	private container: HTMLElement | null = null;
@@ -185,95 +200,39 @@ export class SnippetCompletionMenu {
 		const snippets = this.options.getSnippets().filter((snippet) => !snippet.hide);
 
 		if (!normalized) {
-			return this.applySort([...snippets], normalized, true);
+			return snippets;
 		}
 
-		const prefixMatches = snippets.filter((snippet) =>
-			snippet.prefix.toLowerCase().startsWith(normalized)
-		);
-		const descriptionMatches = snippets.filter(
-			(snippet) =>
-				!snippet.prefix.toLowerCase().includes(normalized) &&
-				(snippet.description?.toLowerCase().includes(normalized) ??
-					false)
-		);
+		const filtered: ParsedSnippet[] = [];
+		const seen = new Set<ParsedSnippet>();
 
-		return [
-			...this.applySort(prefixMatches, normalized, false),
-			...this.applySort(descriptionMatches, normalized, false),
-		];
-	}
+		const tryAddSnippet = (snippet: ParsedSnippet) => {
+			if (seen.has(snippet)) return;
+			seen.add(snippet);
+			filtered.push(snippet);
+		};
 
-	private applySort(
-		entries: ParsedSnippet[],
-		normalizedQuery: string,
-		isEmptyQuery: boolean
-	): ParsedSnippet[] {
-		const mode = this.options.getSortMode?.() ?? "none";
-		if (mode === "none") {
-			return entries;
+		for (const snippet of snippets) {
+			const prefixLower = snippet.prefix.toLowerCase();
+			if (prefixLower.startsWith(normalized)) {
+				tryAddSnippet(snippet);
+				continue;
+			}
+
+			if (
+				snippet.description?.toLowerCase().includes(normalized) ??
+				false
+			) {
+				tryAddSnippet(snippet);
+				continue;
+			}
+
+			if (matchesFuzzy(prefixLower, normalized)) {
+				tryAddSnippet(snippet);
+			}
 		}
 
-		if (mode === "prefix-length") {
-			return this.sortByLength(entries);
-		}
-
-		if (!normalizedQuery) {
-			if (isEmptyQuery) {
-				return this.sortByPriority(entries);
-			}
-			return this.sortByLength(entries);
-		}
-
-		const scored = entries.map((snippet) => {
-			return {
-				snippet,
-				sortPriority: snippet.priority ?? 0,
-				smartPriority: this.getSmartPriority(snippet, normalizedQuery),
-				length: snippet.prefix.length,
-				alpha: snippet.prefix.toLowerCase(),
-			};
-		});
-
-		scored.sort((a, b) => {
-			if (a.sortPriority !== b.sortPriority) {
-				return b.sortPriority - a.sortPriority;
-			}
-			if (a.smartPriority !== b.smartPriority) {
-				return a.smartPriority - b.smartPriority;
-			}
-			if (a.length !== b.length) {
-				return a.length - b.length;
-			}
-			return a.alpha.localeCompare(b.alpha);
-		});
-
-		return scored.map((item) => item.snippet);
-	}
-
-	private sortByLength(entries: ParsedSnippet[]): ParsedSnippet[] {
-		return [...entries].sort((a, b) => {
-			const lengthDiff = a.prefix.length - b.prefix.length;
-			if (lengthDiff !== 0) return lengthDiff;
-			return a.prefix.localeCompare(b.prefix);
-		});
-	}
-
-	private sortByPriority(entries: ParsedSnippet[]): ParsedSnippet[] {
-		return [...entries].sort((a, b) => {
-			const priorityDiff = (b.priority ?? 0) - (a.priority ?? 0);
-			if (priorityDiff !== 0) return priorityDiff;
-			return a.prefix.localeCompare(b.prefix);
-		});
-	}
-
-	private getSmartPriority(snippet: ParsedSnippet, query: string): number {
-		const prefixLower = snippet.prefix.toLowerCase();
-		if (prefixLower === query) return 0;
-		if (prefixLower.startsWith(query)) return 1;
-		if (prefixLower.includes(query)) return 2;
-		if (snippet.description?.toLowerCase().includes(query)) return 3;
-		return 4;
+		return filtered;
 	}
 
 	private render(coords: { top: number; left: number }): void {
@@ -749,8 +708,11 @@ export class SnippetCompletionMenu {
 
 	private updateEntriesForQuery(query: string): boolean {
 		const filtered = this.filterSnippets(query);
+		const algorithms = this.options.getRankingAlgorithms();
+		const rankingContext = this.buildRankingContext(query);
+
 		if (filtered.length > 0) {
-			this.entries = filtered;
+			this.entries = rankSnippets(filtered, algorithms, rankingContext);
 			this.emptyStateMessage = null;
 			return true;
 		}
@@ -762,17 +724,19 @@ export class SnippetCompletionMenu {
 			return false;
 		}
 
-		const normalized = query.trim().toLowerCase();
-		this.entries = this.applySort(
-			[...allSnippets],
-			normalized,
-			normalized.length === 0
-		);
+		this.entries = rankSnippets(allSnippets, algorithms, rankingContext);
 		const displayQuery = query ?? "";
 		this.emptyStateMessage = displayQuery
 			? `No snippets match "${displayQuery}". Showing all snippets.`
 			: null;
 		return true;
+	}
+
+	private buildRankingContext(query: string) {
+		return {
+			query,
+			usage: this.options.getUsageCounts?.(),
+		};
 	}
 
 	private populateList(listEl: HTMLElement): void {

@@ -1,6 +1,8 @@
 import { SnippetCompletionMenu } from '../src/snippetSuggest';
 import { MockEditor } from './mocks/editor';
 import { PluginLogger } from '../src/logger';
+import { DEFAULT_RANKING_ALGORITHMS } from '../src/rankingConfig';
+import type { RankingAlgorithmSetting } from '../src/types';
 
 jest.mock('../src/editorUtils', () => ({
 	getActiveEditor: jest.fn(),
@@ -76,6 +78,9 @@ const defineDomHelpers = (): () => void => {
 	};
 };
 
+const cloneDefaultRanking = (): RankingAlgorithmSetting[] =>
+	DEFAULT_RANKING_ALGORITHMS.map((entry) => ({ ...entry }));
+
 describe('SnippetCompletionMenu UI flow', () => {
 	let menu: SnippetCompletionMenu;
 	let editor: MockEditor;
@@ -96,7 +101,8 @@ describe('SnippetCompletionMenu UI flow', () => {
 			getSnippets: () => snippets,
 			manager,
 			logger: new PluginLogger(),
-			getSortMode: () => 'smart',
+			getRankingAlgorithms: () => cloneDefaultRanking(),
+			getUsageCounts: () => new Map(),
 		});
 		document.body.innerHTML = '';
 	});
@@ -117,6 +123,28 @@ describe('SnippetCompletionMenu UI flow', () => {
 		menu.close();
 	});
 
+	it('includes fuzzy matches even when prefix does not start with the query', () => {
+		snippets = [
+			createSnippet('html link', 'body', 'Link'),
+			createSnippet('helper', 'body', 'Assistant'),
+		];
+		const ranking: RankingAlgorithmSetting[] = [
+			{ id: 'fuzzy-match', enabled: true },
+			{ id: 'original-order', enabled: true },
+		];
+		menu = new SnippetCompletionMenu(createApp(), {
+			getSnippets: () => snippets,
+			manager,
+			logger: new PluginLogger(),
+			getRankingAlgorithms: () => ranking,
+			getUsageCounts: () => new Map(),
+		});
+		expect(menu.open(editor as any, 'hl')).toBe(true);
+		const titles = Array.from(document.querySelectorAll('.snippet-completion-title')).map((el) => el.textContent);
+		expect(titles).toContain('html link');
+		menu.close();
+	});
+
 	it('handles keyboard navigation and accepts selection', () => {
 		expect(menu.open(editor as any, '')).toBe(true);
 		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown' }));
@@ -126,11 +154,16 @@ describe('SnippetCompletionMenu UI flow', () => {
 	});
 
 	it('respects prefix-length sort mode', () => {
+		const prefixRanking: RankingAlgorithmSetting[] = [
+			{ id: "prefix-length", enabled: true },
+			{ id: "original-order", enabled: true },
+		];
 		const prefixMenu = new SnippetCompletionMenu(createApp(), {
 			getSnippets: () => snippets,
 			manager,
 			logger: new PluginLogger(),
-			getSortMode: () => 'prefix-length',
+			getRankingAlgorithms: () => prefixRanking,
+			getUsageCounts: () => new Map(),
 		});
 		expect(prefixMenu.open(editor as any, '')).toBe(true);
 		const titles = Array.from(document.querySelectorAll('.snippet-completion-title')).map((el) => el.textContent);
@@ -146,7 +179,10 @@ describe('SnippetCompletionMenu UI flow', () => {
 			getSnippets: () => snippets,
 			manager,
 			logger: new PluginLogger(),
-			getSortMode: () => 'none',
+			getRankingAlgorithms: () => [
+				{ id: "original-order", enabled: true },
+			],
+			getUsageCounts: () => new Map(),
 			getPrefixInfo: () => ({ minLength: 1, maxLength: 5 }),
 		});
 
@@ -169,7 +205,10 @@ describe('SnippetCompletionMenu UI flow', () => {
 			getSnippets: () => snippets,
 			manager,
 			logger: new PluginLogger(),
-			getSortMode: () => 'none',
+			getRankingAlgorithms: () => [
+				{ id: "original-order", enabled: true },
+			],
+			getUsageCounts: () => new Map(),
 			getPrefixInfo: () => ({ minLength: 1, maxLength: 6 }),
 		});
 

@@ -2,8 +2,11 @@ import { Editor, MarkdownView, Plugin, Notice } from "obsidian";
 import { Compartment } from "@codemirror/state";
 import type { Extension } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
-import type { ParsedSnippet, SnippetMenuKeymap } from "./src/types";
-import type { SnippetSortMode } from "./src/snippetSuggest";
+import type {
+	ParsedSnippet,
+	SnippetMenuKeymap,
+	RankingAlgorithmSetting,
+} from "./src/types";
 import { SnippetLoader } from "./src/snippetLoader";
 import { SnippetEngine } from "./src/snippetEngine";
 import {
@@ -22,6 +25,10 @@ import {
 	type LocaleStrings,
 } from "./src/i18n";
 import { getContextBeforeCursor } from "./src/prefixContext";
+import {
+	DEFAULT_RANKING_ALGORITHMS,
+	normalizeRankingAlgorithms,
+} from "./src/rankingConfig";
 
 interface PluginSettings {
 	snippetFiles: string[];
@@ -30,8 +37,9 @@ interface PluginSettings {
 	enableDebugLogs: boolean;
 	triggerKey: string;
 	menuKeymap: SnippetMenuKeymap;
-	menuSortMode: SnippetSortMode;
 	debugCategories: DebugCategory[];
+	rankingAlgorithms: RankingAlgorithmSetting[];
+	snippetUsage: Record<string, number>;
 }
 
 const DEFAULT_SETTINGS: PluginSettings = {
@@ -46,8 +54,11 @@ const DEFAULT_SETTINGS: PluginSettings = {
 		accept: "Enter",
 		toggle: "Ctrl-Space",
 	},
-	menuSortMode: "smart",
 	debugCategories: [],
+	rankingAlgorithms: DEFAULT_RANKING_ALGORITHMS.map((entry) => ({
+		...entry,
+	})),
+	snippetUsage: {},
 };
 
 export default class TextSnippetsPlugin extends Plugin {
@@ -59,6 +70,7 @@ export default class TextSnippetsPlugin extends Plugin {
 	private logger = new PluginLogger();
 	private snippetMenu: SnippetCompletionMenu;
 	private localeStrings: LocaleStrings = getLocaleStrings("en");
+	private usageSaveTimer: number | null = null;
 	async onload() {
 		await this.loadSettings();
 		this.logger.debug("general", "🚀 Loading ObVsnip plugin");
@@ -69,7 +81,10 @@ export default class TextSnippetsPlugin extends Plugin {
 		this.snippetManager = new SnippetManager(
 			this.app,
 			this.snippetEngine,
-			this.logger
+			this.logger,
+			{
+				onSnippetApplied: (snippet) => this.recordSnippetUsage(snippet),
+			}
 		);
 
 		if (this.settings.snippetFiles.length > 0) {
@@ -97,7 +112,8 @@ export default class TextSnippetsPlugin extends Plugin {
 			getSnippets: () => this.snippetEngine.getSnippets(),
 			manager: this.snippetManager,
 			logger: this.logger,
-			getSortMode: () => this.settings.menuSortMode,
+			getRankingAlgorithms: () => this.settings.rankingAlgorithms,
+			getUsageCounts: () => this.getSnippetUsageCounts(),
 			getPrefixInfo: () => this.snippetEngine.getPrefixInfo(),
 		});
 		this.registerEvent(
@@ -117,6 +133,10 @@ export default class TextSnippetsPlugin extends Plugin {
 	}
 
 	onunload() {
+		if (this.usageSaveTimer !== null) {
+			window.clearTimeout(this.usageSaveTimer);
+			this.usageSaveTimer = null;
+		}
 		this.logger.debug("general", "🛑 Unloading ObVsnip plugin");
 		this.snippetMenu?.close();
 	}
@@ -135,9 +155,6 @@ export default class TextSnippetsPlugin extends Plugin {
 		if (!this.settings.virtualTextColor) {
 			this.settings.virtualTextColor = "var(--text-muted)";
 		}
-		if (!this.settings.menuSortMode) {
-			this.settings.menuSortMode = DEFAULT_SETTINGS.menuSortMode;
-		}
 		const legacyPath = (this.settings as any).snippetsFilePath;
 		if (!Array.isArray(this.settings.snippetFiles)) {
 			this.settings.snippetFiles = [];
@@ -154,10 +171,53 @@ export default class TextSnippetsPlugin extends Plugin {
 		if (!Array.isArray(this.settings.debugCategories)) {
 			this.settings.debugCategories = [];
 		}
+		if (!Array.isArray(this.settings.rankingAlgorithms)) {
+			this.settings.rankingAlgorithms = DEFAULT_RANKING_ALGORITHMS.map(
+				(entry) => ({ ...entry })
+			);
+		}
+		this.settings.rankingAlgorithms = normalizeRankingAlgorithms(
+			this.settings.rankingAlgorithms
+		);
+		if (
+			!this.settings.snippetUsage ||
+			typeof this.settings.snippetUsage !== "object"
+		) {
+			this.settings.snippetUsage = {};
+		}
 	}
 
 	async saveSettings() {
 		await this.saveData(this.settings);
+	}
+
+	private recordSnippetUsage(snippet: ParsedSnippet): void {
+		if (!snippet?.prefix) {
+			return;
+		}
+		if (!this.settings.snippetUsage) {
+			this.settings.snippetUsage = {};
+		}
+		const current = this.settings.snippetUsage[snippet.prefix] ?? 0;
+		this.settings.snippetUsage[snippet.prefix] = current + 1;
+		this.scheduleUsageSave();
+	}
+
+	private getSnippetUsageCounts(): Map<string, number> {
+		return new Map(
+			Object.entries(this.settings.snippetUsage ?? {}).map(([key, value]) => [
+				key,
+				value ?? 0,
+			])
+		);
+	}
+
+	private scheduleUsageSave(): void {
+		if (this.usageSaveTimer !== null) return;
+		this.usageSaveTimer = window.setTimeout(() => {
+			this.usageSaveTimer = null;
+			void this.saveSettings();
+		}, 1000);
 	}
 
 	async loadSnippetsFromFiles(filePaths?: string[]): Promise<void> {

@@ -1,4 +1,5 @@
 import type { DebugCategory } from "./logger";
+import type { RankingAlgorithmId } from "./types";
 
 export type LocaleKey = "en" | "zh";
 
@@ -32,13 +33,12 @@ export interface LocaleStrings {
 			toggleName: string;
 			toggleDesc: string;
 		};
-		sortName: string;
-		sortDesc: string;
-		sortOptions: {
-			smart: string;
-			length: string;
-			none: string;
-		};
+		rankingSection: string;
+		rankingSectionDesc: string;
+		rankingStableNote: string;
+		rankingAlgorithmNames: Record<RankingAlgorithmId, string>;
+		rankingAlgorithmEnabledDesc: string;
+		rankingAlgorithmDisabledDesc: string;
 		virtualSection: string;
 		showHintsName: string;
 		showHintsDesc: string;
@@ -95,13 +95,22 @@ const translations: Record<LocaleKey, LocaleStrings> = {
 				toggleDesc:
 					"Cycle choice placeholders when active, otherwise open or close the picker.",
 			},
-			sortName: "Sort mode",
-			sortDesc: "Control how the picker orders matching snippets.",
-			sortOptions: {
-				smart: "Smart (best match first)",
-				length: "Prefix length",
-				none: "Keep original order",
+			rankingSection: "🏅 Ranking algorithms",
+			rankingSectionDesc:
+				"Enable scoring strategies and drag enabled ones to prioritize them (disabled strategies stay at the bottom).",
+			rankingStableNote:
+				"Original order acts as a stable tiebreaker when a single algorithm is enabled.",
+			rankingAlgorithmNames: {
+				"fuzzy-match": "Fuzzy match",
+				"prefix-length": "Prefix length",
+				alphabetical: "Alphabetical",
+				"usage-frequency": "Usage frequency",
+				"original-order": "Original order",
 			},
+			rankingAlgorithmEnabledDesc:
+				"Drag to reorder this strategy among other enabled algorithms.",
+			rankingAlgorithmDisabledDesc:
+				"Disabled strategies are fixed at the bottom until re-enabled.",
 			virtualSection: "👻 Virtual text",
 			showHintsName: "Show tab stop hints",
 			showHintsDesc: "Display ghost-text previews at the next tab stop.",
@@ -177,13 +186,22 @@ const translations: Record<LocaleKey, LocaleStrings> = {
 				toggleName: "循环选项 / 打开或关闭选择器",
 				toggleDesc: "在候选占位符上循环选项，否则打开或关闭选择器。",
 			},
-			sortName: "排序模式",
-			sortDesc: "控制选择器如何排列匹配的片段。",
-			sortOptions: {
-				smart: "智能排序（最佳匹配优先）",
-				length: "按前缀长度",
-				none: "保持原始顺序",
+			rankingSection: "🏅 排序算法",
+			rankingSectionDesc:
+				"打开算法后可拖动改变优先级，未开启的算法则固定在底部。",
+			rankingStableNote:
+				"仅剩一个排序算法时，插件默认使用原始顺序做稳定的 tiebreaker。",
+			rankingAlgorithmNames: {
+				"fuzzy-match": "模糊匹配",
+				"prefix-length": "前缀长度",
+				alphabetical: "字母顺序",
+				"usage-frequency": "使用频率",
+				"original-order": "原始顺序",
 			},
+			rankingAlgorithmEnabledDesc:
+				"开启后可拖动以调整优先级。",
+			rankingAlgorithmDisabledDesc:
+				"关闭时会固定在底部无法拖动。",
 			virtualSection: "👻 Virtual text",
 			showHintsName: "显示占位符提示",
 			showHintsDesc: "在下一个占位符位置显示 Virtual text 提示。",
