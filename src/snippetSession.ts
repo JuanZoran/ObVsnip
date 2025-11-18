@@ -25,6 +25,7 @@ type SnippetSessionStack = SnippetSessionEntry[];
 const DEFAULT_WIDGET_CONFIG: SnippetWidgetConfig = {
 	enabled: true,
 	color: '',
+	choiceColor: '',
 };
 
 let widgetConfig: SnippetWidgetConfig = { ...DEFAULT_WIDGET_CONFIG };
@@ -102,7 +103,7 @@ export class ChoiceHintWidget extends WidgetType {
 		private readonly hint: string,
 		private readonly choices: string[],
 		private readonly activeChoice?: string,
-		private readonly color?: string
+		private readonly highlightColor?: string
 	) {
 		super();
 	}
@@ -110,11 +111,10 @@ export class ChoiceHintWidget extends WidgetType {
 	toDOM(): HTMLElement {
 		const wrapper = document.createElement('span');
 		wrapper.className = 'snippet-choice-hint';
-		if (this.color) {
-			wrapper.style.color = this.color;
+		if (this.highlightColor) {
 			wrapper.style.setProperty(
 				"--snippet-choice-active-color",
-				this.color
+				this.highlightColor
 			);
 		}
 
@@ -213,7 +213,9 @@ const buildDecorations = (state: EditorState): DecorationSet => {
 						'⚙️',
 						stop.choices,
 						activeChoice,
-						widgetConfig.color
+						widgetConfig.choiceColor ??
+							widgetConfig.color ??
+							undefined
 					),
 				});
 				pending.push({
