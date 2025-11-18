@@ -82,6 +82,7 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 	private plugin: TextSnippetsPlugin;
 	private rankingListWrapper: HTMLElement | null = null;
 	private draggedAlgorithmId: RankingAlgorithmId | null = null;
+	private virtualPreviewSnippet: HTMLElement | null = null;
 
 	constructor(app: App, plugin: TextSnippetsPlugin) {
 		super(app, plugin);
@@ -204,6 +205,7 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 				this.plugin.settings.choiceHighlightColor = value || "";
 				await this.plugin.saveSettings();
 				this.plugin.applyRuntimeSettings();
+				this.updateVirtualPreviewStyles();
 			}
 		);
 		this.addColorSetting(
@@ -215,6 +217,7 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 				this.plugin.settings.choiceInactiveColor = value || "";
 				await this.plugin.saveSettings();
 				this.plugin.applyRuntimeSettings();
+				this.updateVirtualPreviewStyles();
 			}
 		);
 		this.addColorSetting(
@@ -226,6 +229,7 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 				this.plugin.settings.placeholderActiveColor = value || "";
 				await this.plugin.saveSettings();
 				this.plugin.applyRuntimeSettings();
+				this.updateVirtualPreviewStyles();
 			}
 		);
 		this.addColorSetting(
@@ -237,6 +241,7 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 				this.plugin.settings.ghostTextColor = value || "";
 				await this.plugin.saveSettings();
 				this.plugin.applyRuntimeSettings();
+				this.updateVirtualPreviewStyles();
 			}
 		);
 		this.renderVirtualTextPreview(containerEl, strings);
@@ -626,6 +631,18 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 					.onChange(onChange);
 				text.inputEl.setAttribute("type", "color");
 		});
+	}
+
+	private updateVirtualPreviewStyles(): void {
+		if (!this.virtualPreviewSnippet) return;
+		const vars = [
+			`--snippet-placeholder-color: ${this.plugin.settings.virtualTextColor}`,
+			`--snippet-placeholder-active-color: ${this.plugin.settings.placeholderActiveColor}`,
+			`--snippet-ghost-text-color: ${this.plugin.settings.ghostTextColor}`,
+			`--snippet-choice-active-color: ${this.plugin.settings.choiceHighlightColor}`,
+			`--snippet-choice-inactive-color: ${this.plugin.settings.choiceInactiveColor}`,
+		];
+		this.virtualPreviewSnippet.style.cssText = vars.join(";");
 	}
 
 	private renderVirtualTextPreview(
