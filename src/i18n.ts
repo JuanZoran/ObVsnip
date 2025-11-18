@@ -44,6 +44,12 @@ export interface LocaleStrings {
 		showHintsDesc: string;
 		choiceHighlightName: string;
 		choiceHighlightDesc: string;
+		choiceInactiveName: string;
+		choiceInactiveDesc: string;
+		placeholderActiveName: string;
+		placeholderActiveDesc: string;
+		ghostTextName: string;
+		ghostTextDesc: string;
 		debugSection: string;
 		debugName: string;
 		debugDesc: string;
@@ -119,6 +125,13 @@ const translations: Record<LocaleKey, LocaleStrings> = {
 			choiceHighlightName: "Choice highlight color",
 			choiceHighlightDesc:
 				"Override the color used to emphasize the currently selected choice caption.",
+			choiceInactiveName: "Choice inactive color",
+			choiceInactiveDesc: "Color for all remaining choices.",
+			placeholderActiveName: "Active placeholder color",
+			placeholderActiveDesc:
+				"Customize the glow around the placeholder you are editing.",
+			ghostTextName: "Ghost text color",
+			ghostTextDesc: "Control the color of hover/next-step indicators.",
 			choiceInactiveName: "Choice inactive color",
 			choiceInactiveDesc:
 				"Color for all other choices so you can see the contrast.",
@@ -222,6 +235,12 @@ const translations: Record<LocaleKey, LocaleStrings> = {
 			choiceHighlightName: "选择高亮颜色",
 			choiceHighlightDesc:
 				"设置强调当前选择项的颜色，方便在文本中快速识别。",
+			choiceInactiveName: "非选中项颜色",
+			choiceInactiveDesc: "设置其他 choice 的对比色。",
+			placeholderActiveName: "活动占位符颜色",
+			placeholderActiveDesc: "自定义当前占位符的高亮色。",
+			ghostTextName: "幽灵文本颜色",
+			ghostTextDesc: "控制下一个跳转提示等幽灵文本的颜色。",
 			choiceInactiveName: "非选中项颜色",
 			choiceInactiveDesc: "未选中的 choice 使用此颜色显示。",
 			placeholderActiveName: "活动占位符颜色",

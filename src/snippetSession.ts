@@ -3,8 +3,11 @@ import { Decoration, DecorationSet, EditorView, ViewPlugin, ViewUpdate, WidgetTy
 
 export interface SnippetWidgetConfig {
 	enabled: boolean;
-	color: string;
-	choiceColor?: string;
+	placeholderColor?: string;
+	placeholderActiveColor?: string;
+	ghostTextColor?: string;
+	choiceActiveColor?: string;
+	choiceInactiveColor?: string;
 }
 
 export interface SnippetSessionStop {
@@ -24,8 +27,6 @@ type SnippetSessionStack = SnippetSessionEntry[];
 
 const DEFAULT_WIDGET_CONFIG: SnippetWidgetConfig = {
 	enabled: true,
-	color: '',
-	choiceColor: '',
 };
 
 let widgetConfig: SnippetWidgetConfig = { ...DEFAULT_WIDGET_CONFIG };

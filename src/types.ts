@@ -67,11 +67,11 @@ export interface SnippetMenuKeymap {
 
 export interface SnippetWidgetConfig {
 	enabled: boolean;
-	placeholderColor: string;
-	placeholderActiveColor: string;
-	ghostTextColor: string;
-	choiceActiveColor: string;
-	choiceInactiveColor: string;
+	placeholderColor?: string;
+	placeholderActiveColor?: string;
+	ghostTextColor?: string;
+	choiceActiveColor?: string;
+	choiceInactiveColor?: string;
 }
 
 export type RankingAlgorithmId =
