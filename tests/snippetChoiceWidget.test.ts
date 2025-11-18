@@ -9,6 +9,9 @@ describe("ChoiceHintWidget", () => {
 		expect(entries.length).toBe(choices.length);
 		const active = dom.querySelector(".snippet-choice-entry-active");
 		expect(active?.textContent).toBe("王思凡");
+		expect(dom.style.getPropertyValue("--snippet-choice-active-color")).toBe(
+			"#fff"
+		);
 	});
 
 	it("handles no active match gracefully", () => {

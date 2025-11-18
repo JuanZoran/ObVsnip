@@ -4,6 +4,7 @@ import { Decoration, DecorationSet, EditorView, ViewPlugin, ViewUpdate, WidgetTy
 export interface SnippetWidgetConfig {
 	enabled: boolean;
 	color: string;
+	choiceColor?: string;
 }
 
 export interface SnippetSessionStop {
@@ -111,6 +112,10 @@ export class ChoiceHintWidget extends WidgetType {
 		wrapper.className = 'snippet-choice-hint';
 		if (this.color) {
 			wrapper.style.color = this.color;
+			wrapper.style.setProperty(
+				"--snippet-choice-active-color",
+				this.color
+			);
 		}
 
 		const iconEl = document.createElement('span');

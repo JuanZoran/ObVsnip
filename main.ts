@@ -41,6 +41,7 @@ interface PluginSettings {
 	debugCategories: DebugCategory[];
 	rankingAlgorithms: RankingAlgorithmSetting[];
 	snippetUsage: Record<string, number>;
+	choiceHighlightColor: string;
 }
 
 const DEFAULT_SETTINGS: PluginSettings = {
@@ -60,6 +61,7 @@ const DEFAULT_SETTINGS: PluginSettings = {
 		...entry,
 	})),
 	snippetUsage: {},
+	choiceHighlightColor: "#5690ff",
 };
 
 export default class TextSnippetsPlugin extends Plugin {
@@ -173,6 +175,9 @@ export default class TextSnippetsPlugin extends Plugin {
 			this.settings.rankingAlgorithms = DEFAULT_RANKING_ALGORITHMS.map(
 				(entry) => ({ ...entry })
 			);
+		}
+		if (!this.settings.choiceHighlightColor) {
+			this.settings.choiceHighlightColor = DEFAULT_SETTINGS.choiceHighlightColor;
 		}
 		this.settings.rankingAlgorithms = normalizeRankingAlgorithms(
 			this.settings.rankingAlgorithms
@@ -429,6 +434,7 @@ export default class TextSnippetsPlugin extends Plugin {
 		setSnippetWidgetConfig({
 			enabled: this.settings.showVirtualText,
 			color: this.settings.virtualTextColor,
+			choiceColor: this.settings.choiceHighlightColor,
 		});
 		this.reconfigureTriggerKeymap();
 	}

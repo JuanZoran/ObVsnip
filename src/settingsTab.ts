@@ -195,6 +195,21 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 					})
 			);
 
+		new Setting(containerEl)
+			.setName(strings.choiceHighlightName)
+			.setDesc(strings.choiceHighlightDesc)
+			.addText((text) => {
+				text
+					.setPlaceholder("Highlight color")
+					.setValue(this.plugin.settings.choiceHighlightColor)
+					.onChange(async (value) => {
+						this.plugin.settings.choiceHighlightColor = value || "";
+						await this.plugin.saveSettings();
+						this.plugin.applyRuntimeSettings();
+					});
+				text.inputEl.setAttribute("type", "color");
+			});
+
 		containerEl.createEl("h3", { text: strings.debugSection });
 
 		new Setting(containerEl)

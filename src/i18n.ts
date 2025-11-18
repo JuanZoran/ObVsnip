@@ -114,6 +114,9 @@ const translations: Record<LocaleKey, LocaleStrings> = {
 			virtualSection: "👻 Virtual text",
 			showHintsName: "Show tab stop hints",
 			showHintsDesc: "Display ghost-text previews at the next tab stop.",
+			choiceHighlightName: "Choice highlight color",
+			choiceHighlightDesc:
+				"Override the color used to emphasize the currently selected choice caption.",
 			debugSection: "🛠️ Debugging",
 			debugName: "Enable debug mode",
 			debugDesc: "Print diagnostic information to the developer console.",
@@ -205,6 +208,9 @@ const translations: Record<LocaleKey, LocaleStrings> = {
 			virtualSection: "👻 Virtual text",
 			showHintsName: "显示占位符提示",
 			showHintsDesc: "在下一个占位符位置显示 Virtual text 提示。",
+			choiceHighlightName: "选择高亮颜色",
+			choiceHighlightDesc:
+				"设置强调当前选择项的颜色，方便在文本中快速识别。",
 			debugSection: "🛠️ 调试",
 			debugName: "开启调试模式",
 			debugDesc: "在开发者控制台输出诊断信息。",

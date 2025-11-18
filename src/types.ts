@@ -65,6 +65,10 @@ export interface SnippetMenuKeymap {
 	toggle: string;
 }
 
+export interface WidgetHighlightConfig {
+	choiceColor?: string;
+}
+
 export type RankingAlgorithmId =
 	| "fuzzy-match"
 	| "prefix-length"

@@ -49,7 +49,7 @@ If your plugin does not need CSS, delete this file.
 }
 
 .snippet-choice-entry-active {
-	color: var(--interactive-accent);
+	color: var(--snippet-choice-active-color, var(--interactive-accent));
 	font-weight: 600;
 }
 
