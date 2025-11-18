@@ -42,6 +42,8 @@ export interface LocaleStrings {
 		virtualSection: string;
 		showHintsName: string;
 		showHintsDesc: string;
+		choiceHighlightName: string;
+		choiceHighlightDesc: string;
 		debugSection: string;
 		debugName: string;
 		debugDesc: string;
