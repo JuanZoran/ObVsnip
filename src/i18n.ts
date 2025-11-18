@@ -3,6 +3,51 @@ import type { RankingAlgorithmId } from "./types";
 
 export type LocaleKey = "en" | "zh";
 
+export interface VariableInfo {
+	name: string;
+	detail: string;
+}
+
+const createVariableDetailMap = (
+	infos: VariableInfo[]
+): Record<string, string> =>
+	infos.reduce<Record<string, string>>((acc, info) => {
+		acc[info.name] = info.detail;
+		return acc;
+	}, {});
+
+const BUILTIN_VARIABLE_INFOS_EN: VariableInfo[] = [
+	{ name: "TM_FILENAME", detail: "Active file name (with extension)" },
+	{ name: "TM_FILEPATH", detail: "Active file path relative to the vault" },
+	{ name: "TM_FOLDER", detail: "Name of the folder containing the active file" },
+	{ name: "VAULT_NAME", detail: "Current vault name" },
+	{ name: "TM_SELECTED_TEXT", detail: "Currently selected text in the editor" },
+	{ name: "TM_CLIPBOARD", detail: "Current clipboard text (desktop only)" },
+	{ name: "CURRENT_YEAR", detail: "Current year (YYYY)" },
+	{ name: "CURRENT_MONTH", detail: "Current month (MM)" },
+	{ name: "CURRENT_DATE", detail: "Current date (YYYY-MM-DD)" },
+	{ name: "CURRENT_HOUR", detail: "Current hour (HH, 24-hour)" },
+	{ name: "CURRENT_MINUTE", detail: "Current minute (MM)" },
+	{ name: "CURRENT_SECOND", detail: "Current second (SS)" },
+	{ name: "TIME_FORMATTED", detail: "Current time (HH:mm:ss)" },
+];
+
+const BUILTIN_VARIABLE_INFOS_ZH: VariableInfo[] = [
+	{ name: "TM_FILENAME", detail: "当前文件名（包含扩展名）" },
+	{ name: "TM_FILEPATH", detail: "当前文件在仓库中的路径" },
+	{ name: "TM_FOLDER", detail: "当前文件所在文件夹名称" },
+	{ name: "VAULT_NAME", detail: "当前仓库名称" },
+	{ name: "TM_SELECTED_TEXT", detail: "编辑器中当前选中的文本" },
+	{ name: "TM_CLIPBOARD", detail: "当前剪贴板文本（仅桌面版）" },
+	{ name: "CURRENT_YEAR", detail: "当前年份（YYYY）" },
+	{ name: "CURRENT_MONTH", detail: "当前月份（MM）" },
+	{ name: "CURRENT_DATE", detail: "当前日期（YYYY-MM-DD）" },
+	{ name: "CURRENT_HOUR", detail: "当前小时（HH，24 小时制）" },
+	{ name: "CURRENT_MINUTE", detail: "当前分钟（MM）" },
+	{ name: "CURRENT_SECOND", detail: "当前秒钟（SS）" },
+	{ name: "TIME_FORMATTED", detail: "当前时间（HH:mm:ss）" },
+];
+
 export interface LocaleStrings {
 	commands: {
 		expand: string;
@@ -209,21 +254,7 @@ const translations: Record<LocaleKey, LocaleStrings> = {
 			},
 			variableHelpName: "Built-in variables",
 			variableHelpDesc: "Available variables and usage.",
-			variableDetails: {
-				TM_FILENAME: "Active file name (with extension)",
-				TM_FILEPATH: "Active file path relative to the vault",
-				TM_FOLDER: "Name of the folder containing the active file",
-				VAULT_NAME: "Current vault name",
-				TM_SELECTED_TEXT: "Currently selected text in the editor",
-				TM_CLIPBOARD: "Current clipboard text (desktop only)",
-				CURRENT_YEAR: "Current year (YYYY)",
-				CURRENT_MONTH: "Current month (MM)",
-				CURRENT_DATE: "Current date (YYYY-MM-DD)",
-				CURRENT_HOUR: "Current hour (HH, 24-hour)",
-				CURRENT_MINUTE: "Current minute (MM)",
-				CURRENT_SECOND: "Current second (SS)",
-				TIME_FORMATTED: "Current time (HH:mm:ss)",
-			},
+			variableDetails: createVariableDetailMap(BUILTIN_VARIABLE_INFOS_EN),
 			snippetFilesListName: "Snippet files",
 			snippetFilesListDesc:
 				"Load multiple snippet files; later ones override earlier prefixes.",
@@ -339,21 +370,7 @@ const translations: Record<LocaleKey, LocaleStrings> = {
 			},
 			variableHelpName: "内置变量",
 			variableHelpDesc: "可用变量与说明。",
-			variableDetails: {
-				TM_FILENAME: "当前文件名（包含扩展名）",
-				TM_FILEPATH: "当前文件在仓库中的路径",
-				TM_FOLDER: "当前文件所在文件夹名称",
-				VAULT_NAME: "当前仓库名称",
-				TM_SELECTED_TEXT: "编辑器中当前选中的文本",
-				TM_CLIPBOARD: "当前剪贴板文本（仅桌面版）",
-				CURRENT_YEAR: "当前年份（YYYY）",
-				CURRENT_MONTH: "当前月份（MM）",
-				CURRENT_DATE: "当前日期（YYYY-MM-DD）",
-				CURRENT_HOUR: "当前小时（HH，24 小时制）",
-				CURRENT_MINUTE: "当前分钟（MM）",
-				CURRENT_SECOND: "当前秒钟（SS）",
-				TIME_FORMATTED: "当前时间（HH:mm:ss）",
-			},
+			variableDetails: createVariableDetailMap(BUILTIN_VARIABLE_INFOS_ZH),
 			snippetFilesListName: "片段文件列表",
 			snippetFilesListDesc:
 				"可选择多个 JSON 片段文件；若前缀冲突，后面的文件会覆盖前面的定义。",
