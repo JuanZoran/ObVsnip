@@ -134,10 +134,7 @@ export default class TextSnippetsPlugin extends Plugin {
 	}
 
 	onunload() {
-		if (this.usageSaveTimer !== null) {
-			window.clearTimeout(this.usageSaveTimer);
-			this.usageSaveTimer = null;
-		}
+		this.flushUsageSave();
 		this.logger.debug("general", "🛑 Unloading ObVsnip plugin");
 		this.snippetMenu?.close();
 	}
@@ -213,6 +210,13 @@ export default class TextSnippetsPlugin extends Plugin {
 			this.usageSaveTimer = null;
 			void this.saveSettings();
 		}, 1000);
+	}
+
+	private flushUsageSave(): void {
+		if (this.usageSaveTimer === null) return;
+		window.clearTimeout(this.usageSaveTimer);
+		this.usageSaveTimer = null;
+		void this.saveSettings();
 	}
 
 	async loadSnippetsFromFiles(filePaths?: string[]): Promise<void> {
