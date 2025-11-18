@@ -119,6 +119,86 @@ const translations: Record<LocaleKey, LocaleStrings> = {
 				"Drag to reorder this strategy among other enabled algorithms.",
 			rankingAlgorithmDisabledDesc:
 				"Disabled strategies are fixed at the bottom until re-enabled.",
+						virtualSection: "👻 Virtual text",
+		showHintsName: "Show tab stop hints",
+		showHintsDesc: "Display ghost-text previews at the next tab stop.",
+		choiceHighlightName: "Choice highlight color",
+		choiceHighlightDesc: "Override the color used to emphasize the currently selected choice caption.",
+		choiceInactiveName: "Choice inactive color",
+		choiceInactiveDesc: "Color for all remaining choices.",
+		placeholderActiveName: "Active placeholder color",
+		placeholderActiveDesc: "Customize the glow around the placeholder you are editing.",
+		ghostTextName: "Ghost text color",
+		ghostTextDesc: "Control the color of hover/next-step indicators.",
+debugSection: string;
+		debugName: string;
+		debugDesc: string;
+		debugCategoriesName: string;
+		debugCategoriesDesc: string;
+		debugCategoryOptions: Record<DebugCategory, string>;
+		variableHelpName: string;
+		variableHelpDesc: string;
+		variableDetails: Record<string, string>;
+		snippetFilesListName: string;
+		snippetFilesListDesc: string;
+		snippetFilesOrderHint: string;
+		snippetFilesEmpty: string;
+		snippetFilesAddButton: string;
+		snippetFilesReloadButton: string;
+		snippetFilesRemoveButton: string;
+	};
+}
+
+const translations: Record<LocaleKey, LocaleStrings> = {
+	en: {
+		commands: {
+			expand: "✨ Expand snippet",
+			jumpNext: "➡️ Jump to next tab stop",
+			jumpPrev: "⬅️ Jump to previous tab stop",
+			reload: "🔄 Reload snippets from file",
+			debug: "🧪 Debug: Print snippets to console",
+			openMenu: "📋 Open snippet picker",
+		},
+		settings: {
+			title: "📝 ObVsnip Settings",
+			fileName: "📁 Snippet file",
+			fileDesc: "Choose the VSCode-style JSON that holds your snippets.",
+			chooseButton: "Choose file",
+			editButton: "Open",
+			triggerSection: "⌨️ Trigger key",
+			triggerName: "Trigger shortcut",
+			triggerDesc:
+				'Used for expand/jump fallback, e.g. "Tab" or "Mod-Enter".',
+			pickerSection: "🧾 Snippet picker",
+			pickerHint:
+				"Customize keyboard shortcuts for the inline picker. Leave fields blank to use defaults.",
+			menuKeys: {
+				nextName: "Next item",
+				nextDesc: "Move the selection down.",
+				prevName: "Previous item",
+				prevDesc: "Move the selection up.",
+				acceptName: "Accept selection",
+				acceptDesc: "Insert the highlighted snippet.",
+				toggleName: "Cycle choices / toggle picker",
+				toggleDesc:
+					"Cycle choice placeholders when active, otherwise open or close the picker.",
+			},
+			rankingSection: "🏅 Ranking algorithms",
+			rankingSectionDesc:
+				"Enable scoring strategies and drag enabled ones to prioritize them (disabled strategies stay at the bottom).",
+			rankingStableNote:
+				"Original order acts as a stable tiebreaker when a single algorithm is enabled.",
+			rankingAlgorithmNames: {
+				"fuzzy-match": "Fuzzy match",
+				"prefix-length": "Prefix length",
+				alphabetical: "Alphabetical",
+				"usage-frequency": "Usage frequency",
+				"original-order": "Original order",
+			},
+			rankingAlgorithmEnabledDesc:
+				"Drag to reorder this strategy among other enabled algorithms.",
+			rankingAlgorithmDisabledDesc:
+				"Disabled strategies are fixed at the bottom until re-enabled.",
 			virtualSection: "👻 Virtual text",
 			showHintsName: "Show tab stop hints",
 			showHintsDesc: "Display ghost-text previews at the next tab stop.",
@@ -132,15 +212,6 @@ const translations: Record<LocaleKey, LocaleStrings> = {
 				"Customize the glow around the placeholder you are editing.",
 			ghostTextName: "Ghost text color",
 			ghostTextDesc: "Control the color of hover/next-step indicators.",
-			choiceInactiveName: "Choice inactive color",
-			choiceInactiveDesc:
-				"Color for all other choices so you can see the contrast.",
-			placeholderActiveName: "Active placeholder color",
-			placeholderActiveDesc:
-				"Customize the highlight for the currently active placeholder.",
-			ghostTextName: "Ghost text color",
-			ghostTextDesc:
-				"Control the color of ghost tags like the next tab stop indicator.",
 			debugSection: "🛠️ Debugging",
 			debugName: "Enable debug mode",
 			debugDesc: "Print diagnostic information to the developer console.",
@@ -230,24 +301,18 @@ const translations: Record<LocaleKey, LocaleStrings> = {
 			rankingAlgorithmDisabledDesc:
 				"关闭时会固定在底部无法拖动。",
 			virtualSection: "👻 Virtual text",
-			showHintsName: "显示占位符提示",
-			showHintsDesc: "在下一个占位符位置显示 Virtual text 提示。",
-			choiceHighlightName: "选择高亮颜色",
-			choiceHighlightDesc:
-				"设置强调当前选择项的颜色，方便在文本中快速识别。",
-			choiceInactiveName: "非选中项颜色",
-			choiceInactiveDesc: "设置其他 choice 的对比色。",
-			placeholderActiveName: "活动占位符颜色",
-			placeholderActiveDesc: "自定义当前占位符的高亮色。",
-			ghostTextName: "幽灵文本颜色",
-			ghostTextDesc: "控制下一个跳转提示等幽灵文本的颜色。",
-			choiceInactiveName: "非选中项颜色",
-			choiceInactiveDesc: "未选中的 choice 使用此颜色显示。",
-			placeholderActiveName: "活动占位符颜色",
-			placeholderActiveDesc: "自定义当前占位符的高亮色。",
-			ghostTextName: "幽灵文本颜色",
-			ghostTextDesc: "控制下一步/跳转提示等幽灵文本的颜色。",
-			debugSection: "🛠️ 调试",
+							virtualSection: "👻 Virtual text",
+				showHintsName: "显示占位符提示",
+				showHintsDesc: "在下一个占位符位置显示 Virtual text 提示。",
+				choiceHighlightName: "选择高亮颜色",
+				choiceHighlightDesc: "设置强调当前选择项的颜色，方便在文本中快速识别。",
+				choiceInactiveName: "非选中项颜色",
+				choiceInactiveDesc: "设置其他 choice 的对比色。",
+				placeholderActiveName: "活动占位符颜色",
+				placeholderActiveDesc: "自定义当前占位符的高亮色。",
+				ghostTextName: "幽灵文本颜色",
+				ghostTextDesc: "控制下一步/跳转提示等幽灵文本的颜色。",
+debugSection: "🛠️ 调试",
 			debugName: "开启调试模式",
 			debugDesc: "在开发者控制台输出诊断信息。",
 			debugCategoriesName: "调试模块",
