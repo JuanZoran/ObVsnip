@@ -29,6 +29,7 @@ import {
 	DEFAULT_RANKING_ALGORITHMS,
 	normalizeRankingAlgorithms,
 } from "./src/rankingConfig";
+import { incrementUsageCount, usageRecordToMap } from "./src/usageTracker";
 
 interface PluginSettings {
 	snippetFiles: string[];
@@ -195,21 +196,15 @@ export default class TextSnippetsPlugin extends Plugin {
 		if (!snippet?.prefix) {
 			return;
 		}
-		if (!this.settings.snippetUsage) {
-			this.settings.snippetUsage = {};
-		}
-		const current = this.settings.snippetUsage[snippet.prefix] ?? 0;
-		this.settings.snippetUsage[snippet.prefix] = current + 1;
+		this.settings.snippetUsage = incrementUsageCount(
+			this.settings.snippetUsage,
+			snippet.prefix
+		);
 		this.scheduleUsageSave();
 	}
 
 	private getSnippetUsageCounts(): Map<string, number> {
-		return new Map(
-			Object.entries(this.settings.snippetUsage ?? {}).map(([key, value]) => [
-				key,
-				value ?? 0,
-			])
-		);
+		return usageRecordToMap(this.settings.snippetUsage);
 	}
 
 	private scheduleUsageSave(): void {

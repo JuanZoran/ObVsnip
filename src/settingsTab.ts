@@ -237,8 +237,7 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 
 		const categoryLabels = strings.debugCategoryOptions;
 		DEBUG_CATEGORY_KEYS.forEach((key) => {
-			new Setting(containerEl)
-				.setClass("debug-module-item")
+			const debugRow = new Setting(containerEl)
 				.setName(categoryLabels[key])
 				.addToggle((toggle) =>
 					toggle
@@ -261,6 +260,10 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 							this.plugin.applyRuntimeSettings();
 						})
 				);
+			const rowEl = debugRow.settingEl;
+			if (rowEl) {
+				rowEl.addClass("debug-module-item");
+			}
 		});
 	}
 
