@@ -646,7 +646,7 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 			cls: "preview-placeholder",
 			text: "李洪昆",
 		});
-		snippet.createTextNode("⚙️ ");
+		snippet.appendChild(document.createTextNode("⚙️ "));
 		const choices = snippet.createSpan({
 			cls: "preview-choice-list",
 		});
@@ -662,7 +662,7 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 				choices.appendChild(document.createTextNode("/"));
 			}
 		});
-		snippet.createTextNode("，你好！$0");
+		snippet.appendChild(document.createTextNode("，你好！$0"));
 	}
 
 	private async handleReloadSnippets(): Promise<void> {
