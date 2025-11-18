@@ -35,6 +35,11 @@ If your plugin does not need CSS, delete this file.
 	color: var(--snippet-ghost-text-color, var(--text-muted));
 }
 
+.snippet-choice-hint-active {
+	color: var(--snippet-placeholder-active-color, rgba(86, 156, 214, 0.7));
+	font-weight: 600;
+}
+
 .snippet-completion-menu {
 	position: fixed;
 	z-index: 1000;

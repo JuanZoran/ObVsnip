@@ -96,11 +96,12 @@ class NextTabStopWidget extends WidgetType {
 	}
 }
 
-class ChoiceHintWidget extends WidgetType {
+export class ChoiceHintWidget extends WidgetType {
 	constructor(
 		private readonly hint: string,
 		private readonly choicesLabel?: string,
-		private readonly color?: string
+		private readonly color?: string,
+		private readonly active?: boolean
 	) {
 		super();
 	}
@@ -108,6 +109,9 @@ class ChoiceHintWidget extends WidgetType {
 	toDOM(): HTMLElement {
 		const span = document.createElement('span');
 		span.className = 'snippet-choice-hint';
+		if (this.active) {
+			span.classList.add('snippet-choice-hint-active');
+		}
 		if (this.color) {
 			span.style.color = this.color;
 		}
@@ -179,16 +183,17 @@ const buildDecorations = (state: EditorState): DecorationSet => {
 			}),
 		});
 
-		if (isActive && stop.choices && stop.choices.length > 0) {
-			const choicesLabel = stop.choices.join('/');
-			const hintWidget = Decoration.widget({
-				side: 1,
-				widget: new ChoiceHintWidget(
-					'⚙️',
-					choicesLabel,
-					widgetConfig.color
-				),
-			});
+			if (isActive && stop.choices && stop.choices.length > 0) {
+				const choicesLabel = stop.choices.join('/');
+				const hintWidget = Decoration.widget({
+					side: 1,
+					widget: new ChoiceHintWidget(
+						'⚙️',
+						choicesLabel,
+						widgetConfig.color,
+						true
+					),
+				});
 			pending.push({
 				from: stop.end,
 				to: stop.end,
