@@ -15,7 +15,13 @@ const createEditor = (selection: string | null = null) => ({
 
 describe('variableResolver built-ins', () => {
 	beforeAll(() => {
-		jest.useFakeTimers().setSystemTime(new Date('2024-05-06T07:08:09'));
+		jest.useFakeTimers();
+	});
+
+	const BASE_TIME = new Date('2024-09-03T09:05:07');
+
+	beforeEach(() => {
+		jest.setSystemTime(BASE_TIME);
 	});
 
 	afterAll(() => {
@@ -58,12 +64,26 @@ describe('variableResolver built-ins', () => {
 		const app = createApp(null);
 		const editor = createEditor();
 		expect(resolveVariableValue('CURRENT_YEAR', { app: app as any, editor: editor as any }).value).toBe('2024');
-		expect(resolveVariableValue('CURRENT_MONTH', { app: app as any, editor: editor as any }).value).toBe('05');
-		expect(resolveVariableValue('CURRENT_DATE', { app: app as any, editor: editor as any }).value).toBe('2024-05-06');
-		expect(resolveVariableValue('CURRENT_HOUR', { app: app as any, editor: editor as any }).value).toBe('07');
-		expect(resolveVariableValue('CURRENT_MINUTE', { app: app as any, editor: editor as any }).value).toBe('08');
-		expect(resolveVariableValue('CURRENT_SECOND', { app: app as any, editor: editor as any }).value).toBe('09');
-		expect(resolveVariableValue('TIME_FORMATTED', { app: app as any, editor: editor as any }).value).toBe('07:08:09');
+		expect(resolveVariableValue('CURRENT_MONTH', { app: app as any, editor: editor as any }).value).toBe('09');
+		expect(resolveVariableValue('CURRENT_DATE', { app: app as any, editor: editor as any }).value).toBe('2024-09-03');
+		expect(resolveVariableValue('CURRENT_HOUR', { app: app as any, editor: editor as any }).value).toBe('09');
+		expect(resolveVariableValue('CURRENT_MINUTE', { app: app as any, editor: editor as any }).value).toBe('05');
+		expect(resolveVariableValue('CURRENT_SECOND', { app: app as any, editor: editor as any }).value).toBe('07');
+		expect(resolveVariableValue('TIME_FORMATTED', { app: app as any, editor: editor as any }).value).toBe('09:05:07');
+	});
+
+	it('pads single-digit pieces when time is near year boundary', () => {
+		const app = createApp(null);
+		const editor = createEditor();
+		jest.setSystemTime(new Date('2024-01-02T04:05:06'));
+
+		expect(resolveVariableValue('CURRENT_MONTH', { app: app as any, editor: editor as any }).value).toBe('01');
+		expect(resolveVariableValue('CURRENT_DATE', { app: app as any, editor: editor as any }).value).toBe('2024-01-02');
+		expect(resolveVariableValue('CURRENT_HOUR', { app: app as any, editor: editor as any }).value).toBe('04');
+		expect(resolveVariableValue('CURRENT_MINUTE', { app: app as any, editor: editor as any }).value).toBe('05');
+		expect(resolveVariableValue('CURRENT_SECOND', { app: app as any, editor: editor as any }).value).toBe('06');
+
+		jest.setSystemTime(BASE_TIME);
 	});
 
 	it('returns unknown variable reason', () => {
@@ -72,5 +92,18 @@ describe('variableResolver built-ins', () => {
 		const result = resolveVariableValue('UNKNOWN', { app: app as any, editor: editor as any });
 		expect(result.value).toBeNull();
 		expect(result.reason).toBe('Unknown variable');
+	});
+
+	it('reports reason when clipboard cannot be read', () => {
+		const app = createApp(null);
+		const editor = createEditor();
+		const originalRequire = (window as any).require;
+		(window as any).require = () => ({ clipboard: { readText: () => null } });
+
+		const result = resolveVariableValue('TM_CLIPBOARD', { app: app as any, editor: editor as any });
+		expect(result.value).toBeNull();
+		expect(result.reason).toBe('Clipboard unavailable');
+
+		(window as any).require = originalRequire;
 	});
 });

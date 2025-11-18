@@ -213,17 +213,22 @@ export class SnippetManager {
 
         editor.replaceRange(text, startPos, endPos);
 
-        const baseOffset = editor.posToOffset(startPos);
+		const baseOffset = editor.posToOffset(startPos);
 		const positiveStops = tabStops.filter((t) => t.index > 0);
-		const firstTabStop =
-			positiveStops.sort((a, b) => a.index - b.index)[0] ??
-			tabStops.find((t) => t.index === 0);
-        if (!firstTabStop) {
-            const targetPos = editor.offsetToPos(baseOffset + text.length);
-            editor.setCursor(targetPos);
-            this.logger.debug("manager", 'Snippet has no tab stops; staying in normal mode.');
-            return true;
-        }
+		const firstTabStop = positiveStops.sort((a, b) => a.index - b.index)[0];
+		if (!firstTabStop) {
+			const zeroStop = tabStops.find((stop) => stop.index === 0);
+			const targetOffset =
+				zeroStop?.start !== undefined
+					? baseOffset + zeroStop.start
+					: baseOffset + text.length;
+			editor.setCursor(editor.offsetToPos(targetOffset));
+			this.logger.debug(
+				"manager",
+				"Snippet expanded without tab stops; staying in normal mode."
+			);
+			return true;
+		}
 
         const firstStopAbsolute: SnippetSessionStop = {
             index: firstTabStop.index,

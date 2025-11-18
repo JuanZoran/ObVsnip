@@ -2,7 +2,7 @@ import { App } from 'obsidian';
 import { SnippetManager } from '../src/snippetManager';
 import { SnippetEngine } from '../src/snippetEngine';
 import { PluginLogger } from '../src/logger';
-import { getSnippetSessionStack, pushSnippetSessionEffect } from '../src/snippetSession';
+import { pushSnippetSessionEffect } from '../src/snippetSession';
 import { processSnippetBody } from '../src/snippetBody';
 import { MockEditor, MockEditorView } from './mocks/editor';
 import type { ParsedSnippet } from '../src/types';
@@ -36,17 +36,14 @@ describe('SnippetManager insertion and jumping edge cases', () => {
 			description: '',
 			processedText: 'plain',
 			tabStops: [],
-		};
+		} as ParsedSnippet;
 
-		const origin = { line: 0, ch: 0 };
-		const result = (manager as any).insertSnippet(editor as any, snippet, origin, origin);
-		expect(result).toBe(true);
+		expect(manager.applySnippetAtCursor(snippet, editor as any)).toBe(true);
 		expect(editor.getText()).toBe('plain');
-		let stack = getSnippetSessionStack(view as any);
-		expect(stack?.length ?? 0).toBe(1);
-		expect(manager.jumpToNextTabStop()).toBe(false);
-		stack = getSnippetSessionStack(view as any);
-		expect(stack?.length ?? 0).toBe(0);
+
+		expect(manager.jumpToNextTabStop({ silent: true })).toBe(false);
+		expect(manager.isSnippetActive(editor as any)).toBe(false);
+		expect(editor.getCursor()).toEqual({ line: 0, ch: 5 });
 	});
 
 	it('selects choice tab stop after insertion', () => {
@@ -54,6 +51,7 @@ describe('SnippetManager insertion and jumping edge cases', () => {
 		const editor = new MockEditor('');
 		const view = new MockEditorView('');
 		(getEditorView as jest.Mock).mockReturnValue(view);
+		(getActiveEditor as jest.Mock).mockReturnValue(editor);
 
 		const processed = processSnippetBody('${1|Yes,No|} done');
 		const snippet = {
@@ -63,13 +61,13 @@ describe('SnippetManager insertion and jumping edge cases', () => {
 			processedText: processed.text,
 			tabStops: processed.tabStops,
 			variables: processed.variables,
-		};
+		} as ParsedSnippet;
 
-		const origin = { line: 0, ch: 0 };
-		(manager as any).insertSnippet(editor as any, snippet, origin, origin);
+		expect(manager.applySnippetAtCursor(snippet, editor as any)).toBe(true);
 		expect(editor.getSelection()).toBe('Yes');
-		const stack = getSnippetSessionStack(view as any);
-		expect(stack?.[0].currentIndex).toBe(1);
+		expect(manager.isSnippetActive(editor as any)).toBe(true);
+		expect(manager.cycleChoiceAtCurrentStop()).toBe(true);
+		expect(editor.getSelection()).toBe('No');
 	});
 
 	it('handles zero-length tab stop by placing caret', () => {
@@ -86,13 +84,44 @@ describe('SnippetManager insertion and jumping edge cases', () => {
 			processedText: processed.text,
 			tabStops: processed.tabStops,
 			variables: processed.variables,
-		};
+		} as ParsedSnippet;
 
-		const origin = { line: 0, ch: 0 };
-		(manager as any).insertSnippet(editor as any, snippet, origin, origin);
+		expect(manager.applySnippetAtCursor(snippet, editor as any)).toBe(true);
 		const from = editor.getCursor('from');
 		const to = editor.getCursor('to');
 		expect(from).toEqual(to);
+	});
+
+	it('places cursor at inline $0 when only zero stop exists', () => {
+		const manager = buildManager();
+		const editor = new MockEditor('');
+		const view = new MockEditorView('');
+		(getEditorView as jest.Mock).mockReturnValue(view);
+		(getActiveEditor as jest.Mock).mockReturnValue(editor);
+
+		const processed = processSnippetBody('before $0 after');
+		const snippet = {
+			prefix: 'inline',
+			body: 'before $0 after',
+			description: '',
+			processedText: processed.text,
+			tabStops: processed.tabStops,
+			variables: processed.variables,
+		};
+
+		expect(manager.applySnippetAtCursor(snippet, editor as any)).toBe(true);
+		expect(editor.getText()).toBe(processed.text);
+
+		const stop0 = processed.tabStops.find((stop) => stop.index === 0);
+		expect(stop0).toBeDefined();
+
+		const cursor = editor.getCursor();
+		const cursorOffset = editor.posToOffset(cursor);
+		expect(cursorOffset).toBe(stop0?.start);
+		expect(editor.getText().slice(cursorOffset)).toBe(processed.text.slice(cursorOffset));
+
+		expect(manager.jumpToNextTabStop({ silent: true })).toBe(false);
+		expect(manager.isSnippetActive(editor as any)).toBe(false);
 	});
 
 	it('jumpToPrevTabStop exits snippet mode when reaching start', () => {
@@ -119,8 +148,7 @@ describe('SnippetManager insertion and jumping edge cases', () => {
 		manager.jumpToNextTabStop();
 		expect(manager.jumpToPrevTabStop()).toBe(true);
 		expect(manager.jumpToPrevTabStop()).toBe(false);
-		const stack = getSnippetSessionStack(view as any);
-		expect(stack?.length ?? 0).toBe(0);
+		expect(manager.isSnippetActive(editor as any)).toBe(false);
 	});
 
 	it('shouldExitBeforeCachingNextStop reacts to zero-length $0 in real session', () => {
@@ -147,14 +175,16 @@ describe('SnippetManager insertion and jumping edge cases', () => {
 		editor.setCursor({ line: 0, ch: editor.getText().length });
 		// first jump attempts to reach $1 but should exit because $0 already satisfied
 		expect(manager.jumpToNextTabStop()).toBe(false);
-		const stack = getSnippetSessionStack(view as any);
-		expect(stack?.length ?? 0).toBe(0);
+		expect(manager.isSnippetActive(editor as any)).toBe(false);
 	});
 
 	it('forceExitSnippetMode clears active sessions', () => {
 		const logger = { debug: jest.fn() } as PluginLogger;
 		const manager = new SnippetManager({} as any, new SnippetEngine([]), logger);
+		const editor = new MockEditor('');
 		const view = new MockEditorView('');
+		(getActiveEditor as jest.Mock).mockReturnValue(editor);
+		(getEditorView as jest.Mock).mockReturnValue(view);
 		view.dispatch({
 			effects: pushSnippetSessionEffect.of({
 				currentIndex: 1,
@@ -164,7 +194,7 @@ describe('SnippetManager insertion and jumping edge cases', () => {
 
 		const result = manager.forceExitSnippetMode(view as any);
 		expect(result).toBe(true);
-		expect(getSnippetSessionStack(view as any)).toEqual([]);
+		expect(manager.isSnippetActive(editor as any)).toBe(false);
 		expect(logger.debug).toHaveBeenCalledWith(
 			'manager',
 			expect.stringContaining('Exited snippet mode')
@@ -264,8 +294,7 @@ describe('SnippetManager insertion and jumping edge cases', () => {
 
 		const result = manager.jumpToNextTabStop({ silent: true });
 		expect(result).toBe(false);
-		const stack = getSnippetSessionStack(view as any);
-		expect(stack?.length ?? 0).toBe(0);
+		expect(manager.isSnippetActive(editor as any)).toBe(false);
 		expect(__noticeMessages.length).toBe(0);
 	});
 

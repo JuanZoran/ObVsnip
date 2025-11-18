@@ -3,7 +3,6 @@ import { SnippetEngine } from '../src/snippetEngine';
 import { SnippetManager } from '../src/snippetManager';
 import { PluginLogger } from '../src/logger';
 import { processSnippetBody } from '../src/snippetBody';
-import { getSnippetSessionStack } from '../src/snippetSession';
 import { MockEditor, MockEditorView } from './mocks/editor';
 
 jest.mock('../src/editorUtils', () => ({
@@ -30,7 +29,7 @@ describe('SnippetManager core flow', () => {
 		jest.clearAllMocks();
 	});
 
-	it('expands snippet, navigates tab stops, cycles choices, and exits', () => {
+	it('expands snippet and selects the first tab stop', () => {
 		const editor = new MockEditor('foo');
 		editor.setCursor({ line: 0, ch: 3 });
 		const view = new MockEditorView('foo');
@@ -43,19 +42,30 @@ describe('SnippetManager core flow', () => {
 
 		expect(manager.expandSnippet()).toBe(true);
 		expect(editor.getText()).toContain('Hello World Yes');
-		let stack = getSnippetSessionStack(view as any);
-		expect(stack?.[0].currentIndex).toBe(1);
+		expect(editor.getSelection()).toBe('World');
+		expect(manager.isSnippetActive(editor as any)).toBe(true);
+	});
 
+	it('navigates tab stops, cycles choices, and exits snippet mode', () => {
+		const editor = new MockEditor('foo');
+		editor.setCursor({ line: 0, ch: 3 });
+		const view = new MockEditorView('foo');
+		(getActiveEditor as jest.Mock).mockReturnValue(editor);
+		(getEditorView as jest.Mock).mockReturnValue(view);
+
+		const snippet = setupSnippet();
+		const engine = new SnippetEngine([snippet]);
+		const manager = new SnippetManager(new App() as any, engine, new PluginLogger());
+
+		expect(manager.expandSnippet()).toBe(true);
 		expect(manager.jumpToNextTabStop()).toBe(true);
-		stack = getSnippetSessionStack(view as any);
-		expect(stack?.[0].currentIndex).toBe(2);
+		expect(editor.getSelection()).toBe('Yes');
 
 		expect(manager.cycleChoiceAtCurrentStop()).toBe(true);
-		expect(editor.getText()).toContain('No!');
+		expect(editor.getSelection()).toBe('No');
 
 		expect(manager.jumpToNextTabStop()).toBe(false);
-		stack = getSnippetSessionStack(view as any);
-		expect(stack?.length ?? 0).toBe(0);
+		expect(manager.isSnippetActive(editor as any)).toBe(false);
 	});
 
 	it('returns false when no active editor is available', () => {

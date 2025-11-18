@@ -18,8 +18,25 @@ const createSnippet = (prefix: string, body: string, description?: string, prior
 	priority,
 });
 
-const attachDomHelpers = () => {
-	const proto = HTMLElement.prototype as any;
+type DomHelperName = 'createEl' | 'createDiv' | 'createSpan' | 'empty' | 'toggleClass' | 'setText' | 'scrollIntoView';
+const DOM_HELPERS: DomHelperName[] = [
+	'createEl',
+	'createDiv',
+	'createSpan',
+	'empty',
+	'toggleClass',
+	'setText',
+	'scrollIntoView',
+];
+
+const defineDomHelpers = (): () => void => {
+	const proto = HTMLElement.prototype as Record<string, any>;
+	const originals: Partial<Record<DomHelperName, any>> = {};
+
+	DOM_HELPERS.forEach((name) => {
+		originals[name] = proto[name];
+	});
+
 	if (!proto.createEl) {
 		proto.createEl = function (tag: string, options?: { cls?: string; text?: string }) {
 			const el = document.createElement(tag);
@@ -29,46 +46,45 @@ const attachDomHelpers = () => {
 			return el;
 		};
 	}
-	if (!proto.createDiv) {
-		proto.createDiv = function (options?: { cls?: string; text?: string }) {
-			return this.createEl('div', options);
-		};
-	}
-	if (!proto.createSpan) {
-		proto.createSpan = function (options?: { cls?: string; text?: string }) {
-			return this.createEl('span', options);
-		};
-	}
-	if (!proto.empty) {
-		proto.empty = function () {
-			this.textContent = '';
-		};
-	}
-	if (!proto.toggleClass) {
-		proto.toggleClass = function (cls: string, force?: boolean) {
-			this.classList.toggle(cls, force);
-		};
-	}
-	if (!proto.setText) {
-		proto.setText = function (text: string) {
-			this.textContent = text;
-			return this;
-		};
-	}
-	if (!proto.scrollIntoView) {
-		proto.scrollIntoView = () => {};
-	}
-};
 
-attachDomHelpers();
+	proto.createDiv = function (options?: { cls?: string; text?: string }) {
+		return this.createEl('div', options);
+	};
+	proto.createSpan = function (options?: { cls?: string; text?: string }) {
+		return this.createEl('span', options);
+	};
+	proto.empty = function () {
+		this.textContent = '';
+	};
+	proto.toggleClass = function (cls: string, force?: boolean) {
+		this.classList.toggle(cls, force);
+	};
+	proto.setText = function (text: string) {
+		this.textContent = text;
+		return this;
+	};
+	proto.scrollIntoView = () => {};
+
+	return () => {
+		DOM_HELPERS.forEach((name) => {
+			if (originals[name] === undefined) {
+				delete proto[name];
+			} else {
+				proto[name] = originals[name];
+			}
+		});
+	};
+};
 
 describe('SnippetCompletionMenu UI flow', () => {
 	let menu: SnippetCompletionMenu;
 	let editor: MockEditor;
 	let snippets: any[];
 	let manager: { applySnippetAtCursor: jest.Mock };
+	let restoreDomHelpers: (() => void) | null = null;
 
 	beforeEach(() => {
+		restoreDomHelpers = defineDomHelpers();
 		editor = new MockEditor('');
 		snippets = [
 			createSnippet('log', 'console.log()', 'Log', 1),
@@ -88,6 +104,9 @@ describe('SnippetCompletionMenu UI flow', () => {
 	afterEach(() => {
 		menu.close();
 		document.body.innerHTML = '';
+
+		restoreDomHelpers?.();
+		restoreDomHelpers = null;
 	});
 
 	it('filters and sorts snippets based on prefix', () => {

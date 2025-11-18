@@ -69,6 +69,22 @@ describe('processSnippetBody edge cases', () => {
 		expect(result.text).toContain('Broken');
 		expect(result.tabStops.some((stop) => stop.index === 1)).toBe(false);
 	});
+
+	it('recovers from malformed placeholders and maintains later stops', () => {
+		const body =
+			'Edge ${1:first} ${broken ${2:good}} text ${3|a,b|} \\${escaped}';
+		const result = processSnippetBody(body);
+
+		expect(result.tabStops.map((stop) => stop.index)).toEqual([0, 1, 2, 3]);
+		const stop2 = getStop(result.tabStops, 2);
+		const stop3 = getStop(result.tabStops, 3);
+
+		expect(stop2).toBeDefined();
+		expect(stop3?.choices).toEqual(['a', 'b']);
+		expect(result.text).toContain('Edge first');
+		expect(result.text).toContain('good');
+		expect(result.text).toContain('${escaped}');
+	});
 });
 
 describe('SnippetParser.parseJson', () => {
