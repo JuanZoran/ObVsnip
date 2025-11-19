@@ -40,6 +40,25 @@ const matchesFuzzy = (source: string, query: string): boolean => {
 	return true;
 };
 
+export const formatSnippetPreview = (snippet: ParsedSnippet): string => {
+	const text = snippet.processedText ?? snippet.body ?? "";
+	const stops = Array.isArray(snippet.tabStops)
+		? [...snippet.tabStops].sort((a, b) => a.start - b.start)
+		: [];
+	let cursor = 0;
+	let result = "";
+	for (const stop of stops) {
+		if (stop.start < cursor) {
+			continue;
+		}
+		result += text.slice(cursor, stop.start);
+		result += `$${stop.index}`;
+		cursor = Math.max(cursor, stop.end);
+	}
+	result += text.slice(cursor);
+	return result;
+};
+
 export class SnippetCompletionMenu {
 	private container: HTMLElement | null = null;
 
@@ -326,9 +345,7 @@ export class SnippetCompletionMenu {
 
 		this.previewDescEl.toggleClass("is-hidden", !snippet.description);
 
-		const previewText = snippet.body ?? snippet.processedText ?? "";
-
-		this.previewBodyEl.textContent = previewText;
+		this.previewBodyEl.textContent = formatSnippetPreview(snippet);
 
 		if (this.previewStopsEl) {
 			const stops = (snippet.tabStops ?? []).map((stop) => `$${stop.index}`);

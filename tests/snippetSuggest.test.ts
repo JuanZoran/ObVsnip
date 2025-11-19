@@ -1,4 +1,4 @@
-import { SnippetCompletionMenu } from '../src/snippetSuggest';
+import { SnippetCompletionMenu, formatSnippetPreview } from '../src/snippetSuggest';
 import { MockEditor } from './mocks/editor';
 import { PluginLogger } from '../src/logger';
 import { DEFAULT_RANKING_ALGORITHMS } from '../src/rankingConfig';
@@ -307,5 +307,29 @@ describe('SnippetCompletionMenu UI flow', () => {
 
 		expect(menu.open(editor as any, '')).toBe(false);
 		expect(document.querySelector('.snippet-completion-menu')).toBeNull();
+	});
+});
+
+describe('formatSnippetPreview', () => {
+	it('inserts placeholder markers without duplicating escaped $$', () => {
+		const snippet = {
+			prefix: 'dd',
+			body: '$$\n$0\n$$',
+			processedText: '$\n\n$',
+			tabStops: [{ index: 0, start: 2, end: 2 }],
+		} as any;
+
+		expect(formatSnippetPreview(snippet)).toBe('$\n$0\n$');
+	});
+
+	it('falls back to raw text when there are no stops', () => {
+		const snippet = {
+			prefix: 'plain',
+			body: 'plain $1 text',
+			processedText: 'plain  text',
+			tabStops: [],
+		} as any;
+
+		expect(formatSnippetPreview(snippet)).toBe('plain  text');
 	});
 });
