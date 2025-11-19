@@ -41,27 +41,51 @@ const matchesFuzzy = (source: string, query: string): boolean => {
 	return true;
 };
 
-const PLACEHOLDER_PATTERN = /\$([0-9]+)/g;
-
-const buildPreviewFragment = (text: string): DocumentFragment => {
+export const formatSnippetPreview = (snippet: ParsedSnippet): DocumentFragment => {
 	const fragment = document.createDocumentFragment();
-	const pattern = new RegExp(PLACEHOLDER_PATTERN);
-	let lastIndex = 0;
-	let match: RegExpExecArray | null;
+	const text = snippet.processedText ?? snippet.body ?? "";
+	const stops = Array.isArray(snippet.tabStops)
+		? [...snippet.tabStops].sort((a, b) => a.start - b.start)
+		: [];
+	let cursor = 0;
 
-	while ((match = pattern.exec(text))) {
-		const start = match.index;
-		if (start > lastIndex) {
-			fragment.appendChild(document.createTextNode(text.slice(lastIndex, start)));
+	for (const stop of stops) {
+		if (stop.start < cursor) {
+			continue;
 		}
-		const placeholder = document.createElement("span");
-		placeholder.className = "preview-placeholder";
-		placeholder.textContent = match[0];
-		fragment.appendChild(placeholder);
-		lastIndex = start + match[0].length;
+		if (stop.start > cursor) {
+			fragment.appendChild(document.createTextNode(text.slice(cursor, stop.start)));
+		}
+
+		const placeholderSpan = document.createElement("span");
+		placeholderSpan.className = "preview-placeholder";
+		const placeholderText =
+			text.slice(stop.start, stop.end) || stop.choices?.[0] || `$${stop.index}`;
+		placeholderSpan.textContent = placeholderText;
+		fragment.appendChild(placeholderSpan);
+
+		if (stop.choices && stop.choices.length > 0) {
+			const choiceContainer = document.createElement("span");
+			choiceContainer.className = "preview-choice-list";
+			stop.choices.forEach((choice, idx) => {
+				const choiceEntry = document.createElement("span");
+				choiceEntry.className = "snippet-choice-entry";
+				if (idx === 0) {
+					choiceEntry.classList.add("snippet-choice-entry-active");
+				}
+				choiceEntry.textContent = choice;
+				choiceContainer.appendChild(choiceEntry);
+				if (idx < stop.choices!.length - 1) {
+					choiceContainer.appendChild(document.createTextNode("/"));
+				}
+			});
+			fragment.appendChild(choiceContainer);
+		}
+
+		cursor = Math.max(cursor, stop.end);
 	}
 
-	const trailing = text.slice(lastIndex);
+	const trailing = text.slice(cursor);
 	if (trailing) {
 		const ghostText = document.createElement("span");
 		ghostText.className = "preview-ghost-text";
@@ -91,25 +115,6 @@ const applyPreviewStyles = (el: HTMLElement): void => {
 		styleParts.push(`--snippet-choice-inactive-color:${config.choiceInactiveColor}`);
 	}
 	el.style.cssText = styleParts.join(";");
-};
-
-export const formatSnippetPreview = (snippet: ParsedSnippet): string => {
-	const text = snippet.processedText ?? snippet.body ?? "";
-	const stops = Array.isArray(snippet.tabStops)
-		? [...snippet.tabStops].sort((a, b) => a.start - b.start)
-		: [];
-	let cursor = 0;
-	let result = "";
-	for (const stop of stops) {
-		if (stop.start < cursor) {
-			continue;
-		}
-		result += text.slice(cursor, stop.start);
-		result += `$${stop.index}`;
-		cursor = Math.max(cursor, stop.end);
-	}
-	result += text.slice(cursor);
-	return result;
 };
 
 export class SnippetCompletionMenu {
@@ -398,9 +403,8 @@ export class SnippetCompletionMenu {
 
 		this.previewDescEl.toggleClass("is-hidden", !snippet.description);
 
-		const previewText = formatSnippetPreview(snippet);
+		const fragment = formatSnippetPreview(snippet);
 		this.previewBodyEl.textContent = "";
-		const fragment = buildPreviewFragment(previewText);
 		this.previewBodyEl.appendChild(fragment);
 		applyPreviewStyles(this.previewBodyEl);
 

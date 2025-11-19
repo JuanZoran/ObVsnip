@@ -311,18 +311,26 @@ describe('SnippetCompletionMenu UI flow', () => {
 });
 
 describe('formatSnippetPreview', () => {
-	it('inserts placeholder markers without duplicating escaped $$', () => {
+	it('renders placeholders with default text and choice hints', () => {
 		const snippet = {
 			prefix: 'dd',
 			body: '$$\n$0\n$$',
 			processedText: '$\n\n$',
-			tabStops: [{ index: 0, start: 2, end: 2 }],
+			tabStops: [{ index: 0, start: 2, end: 2, choices: ["Option A", "Option B"] }],
 		} as any;
 
-		expect(formatSnippetPreview(snippet)).toBe('$\n$0\n$');
+		const container = document.createElement('div');
+		container.appendChild(formatSnippetPreview(snippet));
+
+		const placeholder = container.querySelector('.preview-placeholder');
+		expect(placeholder?.textContent).toBe('Option A');
+
+		const choiceEntries = container.querySelectorAll('.snippet-choice-entry');
+		expect(choiceEntries.length).toBe(2);
+		expect(choiceEntries[0].textContent).toBe('Option A');
 	});
 
-	it('falls back to raw text when there are no stops', () => {
+	it('renders ghost text for trailing characters', () => {
 		const snippet = {
 			prefix: 'plain',
 			body: 'plain $1 text',
@@ -330,6 +338,9 @@ describe('formatSnippetPreview', () => {
 			tabStops: [],
 		} as any;
 
-		expect(formatSnippetPreview(snippet)).toBe('plain  text');
+		const container = document.createElement('div');
+		container.appendChild(formatSnippetPreview(snippet));
+
+		expect(container.textContent).toBe('plain  text');
 	});
 });
