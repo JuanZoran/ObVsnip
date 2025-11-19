@@ -80,13 +80,155 @@ class VariableHelpModal extends Modal {
 	}
 }
 
+type SettingsStrings = ReturnType<TextSnippetsPlugin["getStrings"]>["settings"];
+
+export class VirtualTextSchemeControls {
+	private newColorSchemeName = "";
+	private selectedPresetName: string | null = null;
+
+	constructor(
+		private plugin: TextSnippetsPlugin,
+		private strings: SettingsStrings,
+		private updatePreview: () => void,
+		private refresh: () => void
+	) {}
+
+	render(containerEl: HTMLElement): void {
+		const presets = this.plugin.getVirtualTextColorPresets();
+		this.selectedPresetName =
+			this.plugin.getSelectedVirtualTextPresetName() ||
+			this.selectedPresetName;
+
+		new Setting(containerEl)
+			.setName(this.strings.virtualPreviewSchemeSelectName)
+			.setDesc(this.strings.virtualPreviewSchemeSelectDesc)
+			.addDropdown((dropdown) => {
+				dropdown.addOption("", this.strings.virtualPreviewSchemeSelectDefault);
+				for (const preset of presets) {
+					if (!preset.name) continue;
+					dropdown.addOption(preset.name, preset.name);
+				}
+				dropdown.setValue(this.selectedPresetName ?? "");
+				dropdown.onChange(async (value) => {
+					this.selectedPresetName = value || null;
+					if (!value) return;
+					const preset = presets.find((entry) => entry.name === value);
+					if (!preset) return;
+					this.plugin.applyVirtualTextColorPreset(preset);
+					await this.plugin.saveSettings();
+					this.updatePreview();
+					this.refresh();
+				});
+			});
+
+		new Setting(containerEl)
+			.setName(this.strings.virtualPreviewSchemeNameInputName)
+			.setDesc(this.strings.virtualPreviewSchemeNameInputDesc)
+			.addText((text) => {
+				text
+					.setPlaceholder(
+						this.strings.virtualPreviewSchemeNameInputPlaceholder
+					)
+					.setValue(this.newColorSchemeName)
+					.onChange((value) => {
+						this.newColorSchemeName = value;
+					});
+			})
+			.addButton((btn) =>
+				btn
+					.setButtonText(this.strings.virtualPreviewSaveScheme)
+					.setCta()
+					.onClick(() => void this.saveColorScheme())
+			);
+
+		new Setting(containerEl)
+			.setName(this.strings.virtualPreviewImportScheme)
+			.setDesc(this.strings.virtualPreviewImportSchemeDesc)
+			.addButton((btn) =>
+				btn
+					.setButtonText(this.strings.virtualPreviewImportScheme)
+					.onClick(() => void this.importColorSchemeFromPrompt())
+			);
+	}
+
+	private buildColorPreset(name: string): VirtualTextColorPreset {
+		return {
+			name,
+			placeholderColor: this.plugin.settings.virtualTextColor,
+			placeholderActiveColor: this.plugin.settings.placeholderActiveColor,
+			ghostTextColor: this.plugin.settings.ghostTextColor,
+			choiceActiveColor: this.plugin.settings.choiceHighlightColor,
+			choiceInactiveColor: this.plugin.settings.choiceInactiveColor,
+		};
+	}
+
+	private isValidColorPreset(data: unknown): data is VirtualTextColorPreset {
+		if (typeof data !== "object" || !data) return false;
+		const cast = data as Record<string, unknown>;
+		return (
+			typeof cast.placeholderColor === "string" &&
+			typeof cast.placeholderActiveColor === "string" &&
+			typeof cast.ghostTextColor === "string" &&
+			typeof cast.choiceActiveColor === "string" &&
+			typeof cast.choiceInactiveColor === "string"
+		);
+	}
+
+	public async saveColorScheme(nameOverride?: string): Promise<void> {
+		const name = (nameOverride ?? this.newColorSchemeName).trim();
+		if (!name) {
+			new Notice(this.strings.virtualPreviewSchemeNameRequired);
+			return;
+		}
+		this.plugin.saveVirtualTextColorPreset(this.buildColorPreset(name));
+		this.selectedPresetName = name;
+		await this.plugin.saveSettings();
+		new Notice(this.strings.virtualPreviewSchemeSaved);
+		this.newColorSchemeName = "";
+		this.refresh();
+	}
+
+	public async importColorScheme(raw?: string | null): Promise<void> {
+		if (!raw) return;
+		try {
+			const parsed = JSON.parse(raw);
+			if (!this.isValidColorPreset(parsed)) {
+				throw new Error("invalid preset");
+			}
+			const importedName =
+				((parsed as VirtualTextColorPreset).name ?? "").trim() ||
+				this.strings.virtualPreviewImportedName;
+			this.plugin.applyVirtualTextColorPreset({
+				...parsed,
+				name: importedName,
+			});
+			await this.plugin.saveSettings();
+			this.updatePreview();
+			new Notice(this.strings.virtualPreviewImportSuccess);
+			this.selectedPresetName = importedName;
+			this.refresh();
+		} catch {
+			new Notice(this.strings.virtualPreviewImportFailed);
+		}
+	}
+
+	public async importColorSchemeFromPrompt(): Promise<void> {
+		if (
+			typeof window === "undefined" ||
+			typeof window.prompt !== "function"
+		) {
+			new Notice(this.strings.virtualPreviewImportUnsupported);
+			return;
+		}
+		const raw = window.prompt(this.strings.virtualPreviewImportPrompt);
+		await this.importColorScheme(raw);
+	}
+}
 export class TextSnippetsSettingsTab extends PluginSettingTab {
 	private plugin: TextSnippetsPlugin;
 	private rankingListWrapper: HTMLElement | null = null;
 	private draggedAlgorithmId: RankingAlgorithmId | null = null;
 	private virtualPreviewSnippet: HTMLElement | null = null;
-	private newColorSchemeName = "";
-	private selectedColorPresetName: string | null = null;
 
 	constructor(app: App, plugin: TextSnippetsPlugin) {
 		super(app, plugin);
@@ -225,7 +367,13 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 					})
 			);
 
-		this.renderVirtualTextSchemeControls(containerEl, strings);
+		const controls = new VirtualTextSchemeControls(
+			this.plugin,
+			strings,
+			() => this.updateVirtualPreviewStyles(),
+			() => this.display()
+		);
+		controls.render(containerEl);
 
 		this.addColorSetting(
 			containerEl,
@@ -748,64 +896,6 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 		this.virtualPreviewSnippet.style.cssText = vars.join(";");
 	}
 
-	private renderVirtualTextSchemeControls(
-		containerEl: HTMLElement,
-		strings: ReturnType<TextSnippetsPlugin["getStrings"]>["settings"]
-	): void {
-		const presets = this.plugin.getVirtualTextColorPresets();
-		const activePreset = this.plugin.getSelectedVirtualTextPresetName();
-		this.selectedColorPresetName = activePreset || this.selectedColorPresetName;
-
-		new Setting(containerEl)
-			.setName(strings.virtualPreviewSchemeSelectName)
-			.setDesc(strings.virtualPreviewSchemeSelectDesc)
-			.addDropdown((dropdown) => {
-				dropdown.addOption("", strings.virtualPreviewSchemeSelectDefault);
-				for (const preset of presets) {
-					dropdown.addOption(preset.name, preset.name);
-				}
-				dropdown.setValue(this.selectedColorPresetName ?? "");
-				dropdown.onChange(async (value) => {
-					this.selectedColorPresetName = value || null;
-					if (!value) return;
-					const preset = presets.find((entry) => entry.name === value);
-					if (!preset) return;
-					this.plugin.applyVirtualTextColorPreset(preset);
-					await this.plugin.saveSettings();
-					this.updateVirtualPreviewStyles();
-					this.display();
-				});
-			});
-
-		new Setting(containerEl)
-			.setName(strings.virtualPreviewSchemeNameInputName)
-			.setDesc(strings.virtualPreviewSchemeNameInputDesc)
-			.addText((text) => {
-				text
-					.setPlaceholder(strings.virtualPreviewSchemeNameInputPlaceholder)
-					.setValue(this.newColorSchemeName)
-					.onChange((value) => {
-						this.newColorSchemeName = value;
-					});
-			})
-			.addButton((btn) =>
-				btn
-					.setButtonText(strings.virtualPreviewSaveScheme)
-					.setCta()
-					.onClick(() => void this.handleSaveColorScheme())
-			);
-
-		new Setting(containerEl)
-			.setName(strings.virtualPreviewImportScheme)
-			.setDesc(strings.virtualPreviewImportSchemeDesc)
-			.addButton((btn) =>
-				btn
-					.setButtonText(strings.virtualPreviewImportScheme)
-					.onClick(() => void this.handleImportColorScheme())
-			);
-
-	}
-
 	private renderVirtualTextPreview(
 		containerEl: HTMLElement,
 		strings: ReturnType<TextSnippetsPlugin["getStrings"]>["settings"]
@@ -855,81 +945,6 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 		snippet.appendChild(ghostTextSpan);
 		this.virtualPreviewSnippet = snippet;
 		this.updateVirtualPreviewStyles();
-	}
-
-	private buildCurrentColorPreset(name: string): VirtualTextColorPreset {
-		return {
-			name,
-			placeholderColor: this.plugin.settings.virtualTextColor,
-			placeholderActiveColor: this.plugin.settings.placeholderActiveColor,
-			ghostTextColor: this.plugin.settings.ghostTextColor,
-			choiceActiveColor: this.plugin.settings.choiceHighlightColor,
-			choiceInactiveColor: this.plugin.settings.choiceInactiveColor,
-		};
-	}
-
-	private async handleSaveColorScheme(): Promise<void> {
-		const strings = this.plugin.getStrings().settings;
-		const name = this.newColorSchemeName.trim();
-		if (!name) {
-			new Notice(strings.virtualPreviewSchemeNameRequired);
-			return;
-		}
-		this.plugin.saveVirtualTextColorPreset(
-			this.buildCurrentColorPreset(name)
-		);
-		this.selectedColorPresetName = name;
-		await this.plugin.saveSettings();
-		new Notice(strings.virtualPreviewSchemeSaved);
-		this.newColorSchemeName = "";
-		this.selectedColorPresetName = name;
-		this.display();
-	}
-
-	private async handleImportColorScheme(): Promise<void> {
-		const strings = this.plugin.getStrings().settings;
-		const promptFn =
-			typeof window !== "undefined" && typeof window.prompt === "function"
-				? window.prompt.bind(window)
-				: null;
-		if (!promptFn) {
-			new Notice(strings.virtualPreviewImportUnsupported);
-			return;
-		}
-		const raw = promptFn(strings.virtualPreviewImportPrompt);
-		if (!raw) return;
-		try {
-			const parsed = JSON.parse(raw);
-			if (!this.isValidColorPreset(parsed)) {
-				throw new Error("invalid preset");
-			}
-			const preset: VirtualTextColorPreset = {
-				...parsed,
-				name:
-					(parsed as VirtualTextColorPreset).name?.trim() ??
-					strings.virtualPreviewImportedName,
-			};
-			this.plugin.applyVirtualTextColorPreset(preset);
-			await this.plugin.saveSettings();
-			this.updateVirtualPreviewStyles();
-			new Notice(strings.virtualPreviewImportSuccess);
-			this.selectedColorPresetName = preset.name;
-			this.display();
-		} catch (error) {
-			new Notice(strings.virtualPreviewImportFailed);
-		}
-	}
-
-	private isValidColorPreset(data: unknown): data is VirtualTextColorPreset {
-		if (typeof data !== "object" || !data) return false;
-		const cast = data as Record<string, unknown>;
-		return (
-			typeof cast.placeholderColor === "string" &&
-			typeof cast.placeholderActiveColor === "string" &&
-			typeof cast.ghostTextColor === "string" &&
-			typeof cast.choiceActiveColor === "string" &&
-			typeof cast.choiceInactiveColor === "string"
-		);
 	}
 
 	private async handleReloadSnippets(): Promise<void> {

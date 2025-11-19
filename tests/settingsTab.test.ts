@@ -1,4 +1,7 @@
-import { TextSnippetsSettingsTab } from "../src/settingsTab";
+import {
+	TextSnippetsSettingsTab,
+	VirtualTextSchemeControls,
+} from "../src/settingsTab";
 import { getLocaleStrings } from "../src/i18n";
 import { DEFAULT_RANKING_ALGORITHMS } from "../src/rankingConfig";
 import type { ParsedSnippet } from "../src/types";
@@ -193,7 +196,7 @@ describe("TextSnippetsSettingsTab debug area", () => {
 	});
 });
 
-describe("TextSnippetsSettingsTab color presets", () => {
+describe("TextSnippetsSettingsTab ranking preview", () => {
 	const restoreDomHelpers = ensureDomHelpers();
 
 	afterEach(() => {
@@ -203,29 +206,6 @@ describe("TextSnippetsSettingsTab color presets", () => {
 
 	afterAll(() => {
 		restoreDomHelpers();
-	});
-
-	it("saves a named color scheme and clears the input", async () => {
-		const pluginMock = createPluginMock(false) as unknown as TextSnippetsPlugin;
-		const tab = createTab(pluginMock);
-		tab.display = jest.fn();
-		tab["updateVirtualPreviewStyles"] = jest.fn();
-
-		tab["newColorSchemeName"] = "cool";
-		await tab["handleSaveColorScheme"]();
-
-		expect(pluginMock.saveVirtualTextColorPreset).toHaveBeenCalledWith({
-			name: "cool",
-			placeholderColor: pluginMock.settings.virtualTextColor,
-			placeholderActiveColor: pluginMock.settings.placeholderActiveColor,
-			ghostTextColor: pluginMock.settings.ghostTextColor,
-			choiceActiveColor: pluginMock.settings.choiceHighlightColor,
-			choiceInactiveColor: pluginMock.settings.choiceInactiveColor,
-		});
-		expect(pluginMock.saveSettings).toHaveBeenCalled();
-		expect(tab["newColorSchemeName"]).toBe("");
-		expect(tab["selectedColorPresetName"]).toBe("cool");
-		expect(tab.display).toHaveBeenCalled();
 	});
 
 	it("renders ranking preview entries showing usage", () => {
@@ -274,5 +254,67 @@ describe("TextSnippetsSettingsTab color presets", () => {
 		expect(container.textContent).toContain("alpha");
 		expect(container.textContent).toContain("Usage: 5");
 	});
+});
 
+describe("VirtualTextSchemeControls", () => {
+	afterEach(() => {
+		document.body.innerHTML = "";
+		jest.clearAllMocks();
+	});
+
+	it("saves a named color scheme and refreshes the UI", async () => {
+		const pluginMock = createPluginMock(false) as unknown as TextSnippetsPlugin;
+		const strings = pluginMock.getStrings().settings;
+		const updatePreview = jest.fn();
+		const refresh = jest.fn();
+		const controls = new VirtualTextSchemeControls(
+			pluginMock,
+			strings,
+			updatePreview,
+			refresh
+		);
+
+		await controls.saveColorScheme("cool");
+
+		expect(pluginMock.saveVirtualTextColorPreset).toHaveBeenCalledWith({
+			name: "cool",
+			placeholderColor: pluginMock.settings.virtualTextColor,
+			placeholderActiveColor: pluginMock.settings.placeholderActiveColor,
+			ghostTextColor: pluginMock.settings.ghostTextColor,
+			choiceActiveColor: pluginMock.settings.choiceHighlightColor,
+			choiceInactiveColor: pluginMock.settings.choiceInactiveColor,
+		});
+		expect(pluginMock.saveSettings).toHaveBeenCalled();
+		expect(refresh).toHaveBeenCalled();
+	});
+
+	it("imports a valid preset and updates preview", async () => {
+		const pluginMock = createPluginMock(false) as unknown as TextSnippetsPlugin;
+		const strings = pluginMock.getStrings().settings;
+		const updatePreview = jest.fn();
+		const refresh = jest.fn();
+		const controls = new VirtualTextSchemeControls(
+			pluginMock,
+			strings,
+			updatePreview,
+			refresh
+		);
+
+		const presetPayload = {
+			name: "imported",
+			placeholderColor: "#123456",
+			placeholderActiveColor: "#654321",
+			ghostTextColor: "#abcdef",
+			choiceActiveColor: "#fedcba",
+			choiceInactiveColor: "#0f0f0f",
+		};
+		await controls.importColorScheme(JSON.stringify(presetPayload));
+
+		expect(pluginMock.applyVirtualTextColorPreset).toHaveBeenCalledWith(
+			presetPayload
+		);
+		expect(pluginMock.saveSettings).toHaveBeenCalled();
+		expect(updatePreview).toHaveBeenCalled();
+		expect(refresh).toHaveBeenCalled();
+	});
 });

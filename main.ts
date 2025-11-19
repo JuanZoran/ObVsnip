@@ -5,6 +5,7 @@ import type { EditorView } from "@codemirror/view";
 import type {
 	ParsedSnippet,
 	SnippetMenuKeymap,
+	PluginSettings,
 	RankingAlgorithmId,
 	RankingAlgorithmSetting,
 	VirtualTextColorPreset,
@@ -27,113 +28,12 @@ import {
 	type LocaleStrings,
 } from "./src/i18n";
 import { getContextBeforeCursor } from "./src/prefixContext";
-import {
-	DEFAULT_RANKING_ALGORITHMS,
-	normalizeRankingAlgorithms,
-} from "./src/rankingConfig";
+import { normalizeRankingAlgorithms } from "./src/rankingConfig";
 import { incrementUsageCount, usageRecordToMap } from "./src/usageTracker";
-
-const DEFAULT_COLOR_SCHEME = {
-	placeholderColor: "var(--text-muted)",
-	placeholderActiveColor: "rgba(86, 156, 214, 0.35)",
-	ghostTextColor: "var(--text-muted)",
-	choiceActiveColor: "#5690ff",
-	choiceInactiveColor: "#4dabff",
-};
-
-const BUILTIN_COLOR_SCHEMES: VirtualTextColorPreset[] = [
-	{
-		name: "Catppuccin",
-		placeholderColor: "#f5e0dc",
-		placeholderActiveColor: "rgba(255, 171, 185, 0.35)",
-		ghostTextColor: "#c6a0f6",
-		choiceActiveColor: "#f28fad",
-		choiceInactiveColor: "#c6a0f6",
-	},
-	{
-		name: "Tokyonight",
-		placeholderColor: "#c0caf5",
-		placeholderActiveColor: "rgba(226, 232, 240, 0.35)",
-		ghostTextColor: "#9ece6a",
-		choiceActiveColor: "#7aa2f7",
-		choiceInactiveColor: "#b4f9ff",
-	},
-	{
-		name: "GitHub Dark",
-		placeholderColor: "#8b949e",
-		placeholderActiveColor: "rgba(139, 148, 158, 0.4)",
-		ghostTextColor: "#8b949e",
-		choiceActiveColor: "#58a6ff",
-		choiceInactiveColor: "#a5d6ff",
-	},
-	{
-		name: "GitHub Light",
-		placeholderColor: "#6e7781",
-		placeholderActiveColor: "rgba(110, 119, 129, 0.25)",
-		ghostTextColor: "#57606a",
-		choiceActiveColor: "#0969da",
-		choiceInactiveColor: "#1b6bff",
-	},
-	{
-		name: "Everforest",
-		placeholderColor: "#a7c080",
-		placeholderActiveColor: "rgba(167, 192, 128, 0.4)",
-		ghostTextColor: "#7f9f7f",
-		choiceActiveColor: "#d5c3a1",
-		choiceInactiveColor: "#c0d1a0",
-	},
-	{
-		name: "Dracula",
-		placeholderColor: "#f8f8f2",
-		placeholderActiveColor: "rgba(248, 248, 242, 0.35)",
-		ghostTextColor: "#6272a4",
-		choiceActiveColor: "#ff79c6",
-		choiceInactiveColor: "#bd93f9",
-	},
-];
-
-interface PluginSettings {
-	snippetFiles: string[];
-	showVirtualText: boolean;
-	virtualTextColor: string;
-	enableDebugLogs: boolean;
-	triggerKey: string;
-	menuKeymap: SnippetMenuKeymap;
-	debugCategories: DebugCategory[];
-	rankingAlgorithms: RankingAlgorithmSetting[];
-	snippetUsage: Record<string, number>;
-	choiceHighlightColor: string;
-	choiceInactiveColor: string;
-	placeholderActiveColor: string;
-	ghostTextColor: string;
-	virtualTextPresets: VirtualTextColorPreset[];
-	selectedVirtualTextPresetName: string;
-}
-
-const DEFAULT_SETTINGS: PluginSettings = {
-	snippetFiles: [],
-	showVirtualText: true,
-	virtualTextColor: DEFAULT_COLOR_SCHEME.placeholderColor,
-	enableDebugLogs: false,
-	triggerKey: "Tab",
-	menuKeymap: {
-		next: "ArrowDown",
-		prev: "ArrowUp",
-		accept: "Enter",
-		toggle: "Ctrl-Space",
-	},
-	debugCategories: [],
-	rankingAlgorithms: DEFAULT_RANKING_ALGORITHMS.map((entry) => ({
-		...entry,
-	})),
-	snippetUsage: {},
-	choiceHighlightColor: DEFAULT_COLOR_SCHEME.choiceActiveColor,
-	choiceInactiveColor: DEFAULT_COLOR_SCHEME.choiceInactiveColor,
-	placeholderActiveColor: DEFAULT_COLOR_SCHEME.placeholderActiveColor,
-	ghostTextColor: DEFAULT_COLOR_SCHEME.ghostTextColor,
-	virtualTextPresets: [],
-	selectedVirtualTextPresetName: "",
-};
+import {
+	BUILTIN_COLOR_SCHEMES,
+	ensurePluginSettings,
+} from "./src/config/defaults";
 
 export default class TextSnippetsPlugin extends Plugin {
 	settings: PluginSettings;
@@ -214,19 +114,8 @@ export default class TextSnippetsPlugin extends Plugin {
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign(
-			{},
-			DEFAULT_SETTINGS,
-			await this.loadData()
-		);
-		this.settings.menuKeymap = Object.assign(
-			{},
-			DEFAULT_SETTINGS.menuKeymap,
-			this.settings.menuKeymap || {}
-		);
-		if (!this.settings.virtualTextColor) {
-			this.settings.virtualTextColor = "var(--text-muted)";
-		}
+		const raw = await this.loadData();
+		this.settings = ensurePluginSettings(raw ?? {});
 		const legacyPath = (this.settings as any).snippetsFilePath;
 		if (!Array.isArray(this.settings.snippetFiles)) {
 			this.settings.snippetFiles = [];
@@ -243,25 +132,6 @@ export default class TextSnippetsPlugin extends Plugin {
 		if (!Array.isArray(this.settings.debugCategories)) {
 			this.settings.debugCategories = [];
 		}
-		if (!Array.isArray(this.settings.rankingAlgorithms)) {
-			this.settings.rankingAlgorithms = DEFAULT_RANKING_ALGORITHMS.map(
-				(entry) => ({ ...entry })
-			);
-		}
-		if (!this.settings.choiceHighlightColor) {
-			this.settings.choiceHighlightColor = DEFAULT_SETTINGS.choiceHighlightColor;
-		}
-		if (!this.settings.choiceInactiveColor) {
-			this.settings.choiceInactiveColor =
-				DEFAULT_SETTINGS.choiceInactiveColor;
-		}
-		if (!this.settings.placeholderActiveColor) {
-			this.settings.placeholderActiveColor =
-				DEFAULT_SETTINGS.placeholderActiveColor;
-		}
-		if (!this.settings.ghostTextColor) {
-			this.settings.ghostTextColor = DEFAULT_SETTINGS.ghostTextColor;
-		}
 		this.settings.rankingAlgorithms = normalizeRankingAlgorithms(
 			this.settings.rankingAlgorithms
 		);
@@ -270,12 +140,6 @@ export default class TextSnippetsPlugin extends Plugin {
 			typeof this.settings.snippetUsage !== "object"
 		) {
 			this.settings.snippetUsage = {};
-		}
-		if (!Array.isArray(this.settings.virtualTextPresets)) {
-			this.settings.virtualTextPresets = [];
-		}
-		if (!this.settings.selectedVirtualTextPresetName) {
-			this.settings.selectedVirtualTextPresetName = "";
 		}
 	}
 
@@ -553,7 +417,7 @@ export default class TextSnippetsPlugin extends Plugin {
 	}
 
 	public saveVirtualTextColorPreset(preset: VirtualTextColorPreset): void {
-		const normalized = preset.name.trim();
+		const normalized = (preset.name ?? "").trim();
 		if (!normalized) return;
 		const existingIndex = this.settings.virtualTextPresets.findIndex(
 			(entry) => entry.name === normalized
@@ -575,7 +439,7 @@ export default class TextSnippetsPlugin extends Plugin {
 		this.settings.ghostTextColor = preset.ghostTextColor;
 		this.settings.choiceHighlightColor = preset.choiceActiveColor;
 		this.settings.choiceInactiveColor = preset.choiceInactiveColor;
-		this.settings.selectedVirtualTextPresetName = preset.name;
+		this.settings.selectedVirtualTextPresetName = preset.name ?? "";
 		this.applyRuntimeSettings();
 	}
 

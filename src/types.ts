@@ -1,3 +1,5 @@
+import type { DebugCategory } from "./logger";
+
 /**
  * VSCode-style snippet definition
  * Example:
@@ -74,8 +76,26 @@ export interface SnippetWidgetConfig {
 	choiceInactiveColor?: string;
 }
 
+export interface PluginSettings {
+	snippetFiles: string[];
+	showVirtualText: boolean;
+	virtualTextColor: string;
+	enableDebugLogs: boolean;
+	triggerKey: string;
+	menuKeymap: SnippetMenuKeymap;
+	debugCategories: DebugCategory[];
+	rankingAlgorithms: RankingAlgorithmSetting[];
+	snippetUsage: Record<string, number>;
+	choiceHighlightColor: string;
+	choiceInactiveColor: string;
+	placeholderActiveColor: string;
+	ghostTextColor: string;
+	virtualTextPresets: VirtualTextColorPreset[];
+	selectedVirtualTextPresetName: string;
+}
+
 export interface VirtualTextColorPreset {
-	name: string;
+	name?: string;
 	placeholderColor: string;
 	placeholderActiveColor: string;
 	ghostTextColor: string;
