@@ -93,19 +93,22 @@ If your plugin does not need CSS, delete this file.
 	padding: 6px 8px;
 	border-radius: var(--radius-s);
 	white-space: pre-wrap;
-	display: inline-flex;
-	align-items: center;
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
 	gap: 4px;
 }
 
 .preview-snippet-line {
-	display: inline-flex;
-	align-items: center;
-	gap: 0;
+	display: flex;
+	align-items: baseline;
+	gap: 4px;
+	flex-wrap: wrap;
+	width: 100%;
 }
 
 .preview-snippet-line-text {
-	white-space: pre;
+	white-space: pre-wrap;
 }
 
 .preview-placeholder {

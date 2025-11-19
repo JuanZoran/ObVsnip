@@ -326,9 +326,9 @@ export class SnippetCompletionMenu {
 
 		this.previewDescEl.toggleClass("is-hidden", !snippet.description);
 
-		const sanitizedBody = snippet.processedText || snippet.body || "";
+		const previewText = snippet.body ?? snippet.processedText ?? "";
 
-		this.previewBodyEl.textContent = sanitizedBody;
+		this.previewBodyEl.textContent = previewText;
 
 		if (this.previewStopsEl) {
 			const stops = (snippet.tabStops ?? []).map((stop) => `$${stop.index}`);
