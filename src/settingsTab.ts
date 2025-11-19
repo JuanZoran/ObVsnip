@@ -15,7 +15,7 @@ import type {
 	VirtualTextColorPreset,
 } from "./types";
 import type { DebugCategory } from "./logger";
-import { BUILTIN_VARIABLES } from "./snippetBody";
+import { BUILTIN_VARIABLES, processSnippetBody } from "./snippetBody";
 import {
 	moveEnabledAlgorithm,
 	normalizeRankingAlgorithms,
@@ -81,6 +81,13 @@ class VariableHelpModal extends Modal {
 }
 
 type SettingsStrings = ReturnType<TextSnippetsPlugin["getStrings"]>["settings"];
+
+interface VirtualPreviewSnippetData {
+	beforeText: string;
+	placeholderText: string;
+	afterText: string;
+	choices: string[];
+}
 
 export class VirtualTextSchemeControls {
 	private newColorSchemeName = "";
@@ -909,23 +916,34 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 			text: strings.virtualPreviewDesc,
 			cls: "virtual-preview-desc",
 		});
+		const previewData = this.getVirtualPreviewSnippetData(strings);
 		const snippet = wrapper.createDiv({ cls: "virtual-preview-snippet" });
-		const placeholder = snippet.createSpan({
+		const previewLine = snippet.createSpan({ cls: "preview-snippet-line" });
+		if (previewData.beforeText) {
+			previewLine.createSpan({
+				cls: "preview-snippet-line-text",
+				text: previewData.beforeText,
+			});
+		}
+		previewLine.createSpan({
 			cls: "preview-placeholder",
-			text: strings.virtualPreviewSamplePlaceholder,
+			text:
+				previewData.placeholderText ||
+				strings.virtualPreviewSamplePlaceholder,
 		});
-		const placeholderActive = snippet.createSpan({
-			cls: "preview-placeholder-active",
-			text: strings.virtualPreviewSampleActivePlaceholder,
-		});
-		snippet.appendChild(document.createTextNode("⚙️ "));
+		if (previewData.afterText) {
+			previewLine.createSpan({
+				cls: "preview-snippet-line-text",
+				text: previewData.afterText,
+			});
+		}
 		const choices = snippet.createSpan({
 			cls: "preview-choice-list",
 		});
 		const sampleChoices =
-			strings.virtualPreviewSampleChoices.length > 0
-				? strings.virtualPreviewSampleChoices
-				: ["Option A", "Option B", "Option C"];
+			previewData.choices.length > 0
+				? previewData.choices
+				: strings.virtualPreviewSampleChoices;
 		sampleChoices.forEach((choice, index) => {
 			const entry = choices.createSpan({
 				cls: "snippet-choice-entry",
@@ -945,6 +963,48 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 		snippet.appendChild(ghostTextSpan);
 		this.virtualPreviewSnippet = snippet;
 		this.updateVirtualPreviewStyles();
+	}
+
+	private getVirtualPreviewSnippetData(
+		strings: ReturnType<TextSnippetsPlugin["getStrings"]>["settings"]
+	): VirtualPreviewSnippetData {
+		const fallback: VirtualPreviewSnippetData = {
+			beforeText: "",
+			placeholderText: strings.virtualPreviewSamplePlaceholder,
+			afterText: "",
+			choices: strings.virtualPreviewSampleChoices,
+		};
+		const sample = strings.virtualPreviewSampleSnippet;
+		if (!sample) {
+			return fallback;
+		}
+		try {
+			const processed = processSnippetBody(sample);
+			const placeholderStop = processed.tabStops.find(
+				(stop) => stop.index === 1
+			);
+			const beforeText = placeholderStop
+				? processed.text.slice(0, placeholderStop.start)
+				: processed.text;
+			const placeholderText = placeholderStop
+				? processed.text.slice(placeholderStop.start, placeholderStop.end)
+				: fallback.placeholderText;
+			const afterText = placeholderStop
+				? processed.text.slice(placeholderStop.end)
+				: "";
+			const choiceStop = processed.tabStops.find(
+				(stop) => Array.isArray(stop.choices) && stop.choices.length > 0
+			);
+			const choices = choiceStop?.choices ?? fallback.choices;
+			return {
+				beforeText,
+				placeholderText,
+				afterText,
+				choices,
+			};
+		} catch {
+			return fallback;
+		}
 	}
 
 	private async handleReloadSnippets(): Promise<void> {

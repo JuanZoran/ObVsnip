@@ -92,10 +92,20 @@ If your plugin does not need CSS, delete this file.
 	background: var(--background-modifier-hover);
 	padding: 6px 8px;
 	border-radius: var(--radius-s);
-	white-space: nowrap;
+	white-space: pre-wrap;
 	display: inline-flex;
 	align-items: center;
 	gap: 4px;
+}
+
+.preview-snippet-line {
+	display: inline-flex;
+	align-items: center;
+	gap: 0;
+}
+
+.preview-snippet-line-text {
+	white-space: pre;
 }
 
 .preview-placeholder {

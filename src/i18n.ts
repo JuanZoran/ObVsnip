@@ -104,6 +104,7 @@ export interface LocaleStrings {
 		virtualPreviewTitle: string;
 		virtualPreviewDesc: string;
 		virtualPreviewSamplePlaceholder: string;
+		virtualPreviewSampleSnippet: string;
 		virtualPreviewSampleChoices: string[];
 		virtualPreviewSampleGreeting: string;
 		virtualPreviewSampleActivePlaceholder: string;
@@ -213,6 +214,8 @@ const translations: Record<LocaleKey, LocaleStrings> = {
 			virtualPreviewTitle: "Preview",
 			virtualPreviewDesc: "Sample snippet showing how your highlight colors will look.",
 			virtualPreviewSamplePlaceholder: "Preview placeholder",
+			virtualPreviewSampleSnippet:
+				"console.log(${1|Option A,Option B,Option C|});\n$0",
 			virtualPreviewSampleChoices: ["Option A", "Option B", "Option C"],
 			virtualPreviewSampleGreeting: " — Hello world, $0",
 			virtualPreviewSampleActivePlaceholder: "Active placeholder",
@@ -333,6 +336,8 @@ const translations: Record<LocaleKey, LocaleStrings> = {
 					virtualPreviewTitle: "预览",
 					virtualPreviewDesc: "示例显示当前配置下的虚拟文本颜色。",
 					virtualPreviewSamplePlaceholder: "示例占位符",
+					virtualPreviewSampleSnippet:
+						"console.log(${1|选项一,选项二,选项三|});\n$0",
 					virtualPreviewSampleChoices: ["选项一", "选项二", "选项三"],
 					virtualPreviewSampleGreeting: " — 你好，$0",
 					virtualPreviewSampleActivePlaceholder: "活跃占位符",
