@@ -61,4 +61,14 @@ describe('SnippetEngine advanced matching', () => {
 		expect(info.end).toBe(7);
 		expect(info.prefix).toBe('test');
 	});
+
+	it('prefers nearest substring constraints over longer overlapping prefixes', () => {
+		const engine = new SnippetEngine([
+			buildSnippet('t', 'text'),
+			buildSnippet('xt', 'text'),
+		]);
+
+		const result = engine.matchSnippetInContext('xt');
+		expect(result?.prefix).toBe('t');
+	});
 });

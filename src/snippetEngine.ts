@@ -71,23 +71,20 @@ export class SnippetEngine {
 			return undefined;
 		}
 
-		const relevantText =
-			beforeCursor.length > this.prefixInfo.maxLength
-				? beforeCursor.slice(-this.prefixInfo.maxLength)
-				: beforeCursor;
+		const relevantLength = Math.min(
+			beforeCursor.length,
+			this.prefixInfo.maxLength
+		);
+		if (relevantLength === 0) {
+			return undefined;
+		}
 
-		// Try matching from minLength to maxLength, longest first
-		for (
-			let len = Math.min(
-				relevantText.length,
-				this.prefixInfo.maxLength
-			);
-			len >= this.prefixInfo.minLength;
-			len--
-		) {
-			const prefix = relevantText.substring(
-				relevantText.length - len
-			);
+		const relevantText = beforeCursor.slice(-relevantLength);
+
+		// Try matching from shortest substring nearest the cursor, expanding outwards
+		for (let len = 1; len <= relevantText.length; len++) {
+			const prefixStart = relevantText.length - len;
+			const prefix = relevantText.substring(prefixStart);
 			const snippet = this.findByPrefix(prefix);
 			if (snippet) {
 				return snippet;

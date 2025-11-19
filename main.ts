@@ -232,15 +232,22 @@ export default class TextSnippetsPlugin extends Plugin {
 		}
 	}
 
+	private getCommandEditor(editor?: Editor | null): Editor | null {
+		return (
+			editor ??
+			this.app.workspace.getActiveViewOfType(MarkdownView)?.editor ??
+			null
+		);
+	}
+
 	private registerCommands(): void {
 		this.addCommand({
 			id: "text-snippets-expand",
 			name: this.localeStrings.commands.expand,
 			editorCheckCallback: (checking, editor) => {
-				const hasEditor =
-					editor ||
-					this.app.workspace.getActiveViewOfType(MarkdownView)?.editor;
-				if (checking) return !!hasEditor;
+				const targetEditor = this.getCommandEditor(editor);
+				if (checking) return !!targetEditor;
+				if (!targetEditor) return false;
 				return this.snippetManager.expandSnippet();
 			},
 			hotkeys: [{ modifiers: ["Mod"], key: "Enter" }],
@@ -250,10 +257,9 @@ export default class TextSnippetsPlugin extends Plugin {
 			id: "text-snippets-jump-next",
 			name: this.localeStrings.commands.jumpNext,
 			editorCheckCallback: (checking, editor) => {
-				const hasEditor =
-					editor ||
-					this.app.workspace.getActiveViewOfType(MarkdownView)?.editor;
-				if (checking) return !!hasEditor;
+				const targetEditor = this.getCommandEditor(editor);
+				if (checking) return !!targetEditor;
+				if (!targetEditor) return false;
 				return this.snippetManager.jumpToNextTabStop();
 			},
 			hotkeys: [{ modifiers: ["Mod"], key: "Tab" }],
@@ -263,10 +269,9 @@ export default class TextSnippetsPlugin extends Plugin {
 			id: "text-snippets-jump-prev",
 			name: this.localeStrings.commands.jumpPrev,
 			editorCheckCallback: (checking, editor) => {
-				const hasEditor =
-					editor ||
-					this.app.workspace.getActiveViewOfType(MarkdownView)?.editor;
-				if (checking) return !!hasEditor;
+				const targetEditor = this.getCommandEditor(editor);
+				if (checking) return !!targetEditor;
+				if (!targetEditor) return false;
 				this.snippetManager.jumpToPrevTabStop();
 				return true;
 			},
@@ -289,11 +294,10 @@ export default class TextSnippetsPlugin extends Plugin {
 			id: "text-snippets-open-menu",
 			name: this.localeStrings.commands.openMenu,
 			editorCheckCallback: (checking, editor) => {
-				const hasEditor =
-					editor ||
-					this.app.workspace.getActiveViewOfType(MarkdownView)?.editor;
-				if (checking) return !!hasEditor;
-				return this.openSnippetMenu(editor);
+				const targetEditor = this.getCommandEditor(editor);
+				if (checking) return !!targetEditor;
+				if (!targetEditor) return false;
+				return this.openSnippetMenu(targetEditor);
 			},
 			hotkeys: [{ modifiers: ["Mod", "Shift"], key: "S" }],
 		});

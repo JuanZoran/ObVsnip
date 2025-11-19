@@ -129,6 +129,7 @@ export class SnippetCompletionMenu {
 	private previewBodyEl: HTMLElement | null = null;
 
 	private previewStopsEl: HTMLElement | null = null;
+	private previewMatchEl: HTMLElement | null = null;
 
 	private entries: ParsedSnippet[] = [];
 
@@ -160,6 +161,7 @@ export class SnippetCompletionMenu {
 	private boundPointerMove: () => void;
 
 	private queryAnchorPos: EditorPosition | null = null;
+	private snippetMatchFields: Map<ParsedSnippet, string> = new Map();
 
 	constructor(private app: App, private options: SnippetMenuOptions) {
 		this.boundKeydown = this.handleKeydown.bind(this);
@@ -281,45 +283,93 @@ export class SnippetCompletionMenu {
 	private filterSnippets(
 		query: string,
 		candidates?: ParsedSnippet[]
-	): ParsedSnippet[] {
+	): {
+		snippets: ParsedSnippet[];
+		matchFields: Map<ParsedSnippet, string>;
+		bestCandidate: string | undefined;
+	} {
 		const normalized = query.trim().toLowerCase();
 
 		const snippets = candidates ?? this.getVisibleSnippets();
 
 		if (!normalized) {
-			return snippets;
+			return {
+				snippets,
+				matchFields: new Map(),
+				bestCandidate: undefined,
+			};
 		}
 
-		const filtered: ParsedSnippet[] = [];
-		const seen = new Set<ParsedSnippet>();
+		const suffixes = this.buildSuffixCandidates(normalized);
 
-		const tryAddSnippet = (snippet: ParsedSnippet) => {
-			if (seen.has(snippet)) return;
-			seen.add(snippet);
-			filtered.push(snippet);
+		const matchInfo = new Map<
+			ParsedSnippet,
+			{ length: number; value: string }
+		>();
+		let bestCandidate: string | undefined;
+
+		let hasAnyMatchOverall = false;
+
+		for (const candidate of suffixes) {
+			let matchedAny = false;
+			for (const snippet of snippets) {
+				const prefixLower = snippet.prefix.toLowerCase();
+				const descLower = snippet.description?.toLowerCase();
+				let matched = false;
+
+				if (prefixLower.startsWith(candidate)) {
+					matched = true;
+				} else if (matchesFuzzy(prefixLower, candidate)) {
+					matched = true;
+				} else if (descLower?.includes(candidate)) {
+					matched = true;
+				}
+
+				if (!matched) continue;
+
+				matchedAny = true;
+				hasAnyMatchOverall = true;
+				const previous = matchInfo.get(snippet);
+				if (!previous || candidate.length > previous.length) {
+					matchInfo.set(snippet, { length: candidate.length, value: candidate });
+				}
+			}
+
+			if (!matchedAny && !hasAnyMatchOverall) {
+				break;
+			}
+		}
+
+		const acceptedSnippets = snippets.filter((snippet) =>
+			matchInfo.has(snippet)
+		);
+		const matchFields = new Map<ParsedSnippet, string>();
+		for (const [snippet, info] of matchInfo.entries()) {
+			matchFields.set(snippet, info.value);
+		}
+
+		const candidateFromMatches = Array.from(matchInfo.values())
+			.sort((a, b) => b.length - a.length)
+			.map((entry) => entry.value)[0];
+		if (candidateFromMatches) {
+			bestCandidate = candidateFromMatches;
+		}
+
+		return {
+			snippets: acceptedSnippets,
+			matchFields,
+			bestCandidate,
 		};
+	}
 
-		for (const snippet of snippets) {
-			const prefixLower = snippet.prefix.toLowerCase();
-			if (prefixLower.startsWith(normalized)) {
-				tryAddSnippet(snippet);
-				continue;
-			}
-
-			if (
-				snippet.description?.toLowerCase().includes(normalized) ??
-				false
-			) {
-				tryAddSnippet(snippet);
-				continue;
-			}
-
-			if (matchesFuzzy(prefixLower, normalized)) {
-				tryAddSnippet(snippet);
-			}
+	private buildSuffixCandidates(value: string): string[] {
+		const candidates: string[] = [];
+		for (let len = 1; len <= value.length; len++) {
+			const candidate = value.substring(value.length - len);
+			if (!candidate) continue;
+			candidates.push(candidate);
 		}
-
-		return filtered;
+		return candidates;
 	}
 
 	private render(coords: { top: number; left: number }): void {
@@ -354,6 +404,9 @@ export class SnippetCompletionMenu {
 
 		this.previewBodyEl = preview.createEl("pre", {
 			cls: "snippet-preview-body",
+		});
+		this.previewMatchEl = preview.createDiv({
+			cls: "snippet-preview-match",
 		});
 
 		document.body.appendChild(container);
@@ -413,6 +466,14 @@ export class SnippetCompletionMenu {
 			this.previewStopsEl.textContent =
 				stops.length > 0 ? `Tab stops: ${stops.join(", ")}` : "";
 			this.previewStopsEl.toggleClass("is-hidden", stops.length === 0);
+		}
+
+		if (this.previewMatchEl) {
+			const matchField = this.getMatchField(snippet);
+			this.previewMatchEl.textContent = matchField
+				? `当前匹配字段: ${matchField}`
+				: "";
+			this.previewMatchEl.toggleClass("is-hidden", !matchField);
 		}
 	}
 
@@ -488,10 +549,10 @@ export class SnippetCompletionMenu {
 
 		if (!this.listEl || !this.container) return;
 
-		this.populateList(this.listEl);
+			this.populateList(this.listEl);
 
-		this.selectIndex(0);
-	}
+			this.selectIndex(0);
+		}
 
 	private applySelection(index: number): void {
 		const snippet = this.entries[index];
@@ -740,17 +801,29 @@ export class SnippetCompletionMenu {
 		}
 
 		const overlapLength = this.findPrefixOverlapLength(snippet, editor);
-		if (overlapLength > 0) {
-			return {
-				from: { line: cursor.line, ch: cursor.ch - overlapLength },
-				to: cursor,
-			};
-		}
+			if (overlapLength > 0) {
+				return {
+					from: { line: cursor.line, ch: cursor.ch - overlapLength },
+					to: cursor,
+				};
+			}
 
-		const anchorRange = this.getAnchorRange(editor);
-		if (anchorRange) {
-			return anchorRange;
-		}
+			const matchField = this.getMatchField(snippet);
+			if (matchField) {
+				const candidateLength = matchField.length;
+				if (candidateLength > 0) {
+					const fromCh = Math.max(0, cursor.ch - candidateLength);
+					return {
+						from: { line: cursor.line, ch: fromCh },
+						to: cursor,
+					};
+				}
+			}
+
+			const anchorRange = this.getAnchorRange(editor);
+			if (anchorRange) {
+				return anchorRange;
+			}
 
 		const fallbackContext = this.getQueryContext(
 			editor,
@@ -774,6 +847,10 @@ export class SnippetCompletionMenu {
 			from: this.queryAnchorPos,
 			to: cursor,
 		};
+	}
+
+	private getMatchField(snippet: ParsedSnippet): string | undefined {
+		return this.snippetMatchFields.get(snippet);
 	}
 
 	private findPrefixOverlapLength(
@@ -801,18 +878,22 @@ export class SnippetCompletionMenu {
 	}
 
 	private updateEntriesForQuery(query: string): boolean {
-		const visibleSnippets = this.getVisibleSnippets();
-		const totalSnippetCount = this.options.getSnippets().length;
-		const hiddenCount = Math.max(totalSnippetCount - visibleSnippets.length, 0);
-		const searchStart = getMonotonicTime();
-		const filtered = this.filterSnippets(query, visibleSnippets);
-		const searchDuration = getMonotonicTime() - searchStart;
-		const algorithms = this.options.getRankingAlgorithms();
-		const rankingContext = this.buildRankingContext(query);
+			const visibleSnippets = this.getVisibleSnippets();
+			const totalSnippetCount = this.options.getSnippets().length;
+			const hiddenCount = Math.max(totalSnippetCount - visibleSnippets.length, 0);
+			const searchStart = getMonotonicTime();
+			const filterResult = this.filterSnippets(query, visibleSnippets);
+			const filtered = filterResult.snippets;
+			this.snippetMatchFields = filterResult.matchFields;
+			const searchDuration = getMonotonicTime() - searchStart;
+			const algorithms = this.options.getRankingAlgorithms();
+			const rankingContextQuery =
+				filterResult.bestCandidate ?? query ?? "";
+			const rankingContext = this.buildRankingContext(rankingContextQuery);
 
-		if (filtered.length > 0) {
-			const rankingStart = getMonotonicTime();
-			this.entries = rankSnippets(filtered, algorithms, rankingContext);
+			if (filtered.length > 0) {
+				const rankingStart = getMonotonicTime();
+				this.entries = rankSnippets(filtered, algorithms, rankingContext);
 			const rankingDuration = getMonotonicTime() - rankingStart;
 			this.emptyStateMessage = null;
 			this.logQueryTelemetry({
@@ -826,22 +907,23 @@ export class SnippetCompletionMenu {
 				rankingDuration,
 				algorithms,
 			});
-			return true;
-		}
+				return true;
+			}
 
-		if (visibleSnippets.length === 0) {
-			this.entries = [];
-			this.emptyStateMessage = null;
-			return false;
-		}
+			if (visibleSnippets.length === 0) {
+				this.snippetMatchFields = new Map();
+				this.entries = [];
+				this.emptyStateMessage = null;
+				return false;
+			}
 
-		const rankingStart = getMonotonicTime();
-		this.entries = rankSnippets(visibleSnippets, algorithms, rankingContext);
-		const rankingDuration = getMonotonicTime() - rankingStart;
+			const rankingStart = getMonotonicTime();
+			this.entries = rankSnippets(visibleSnippets, algorithms, rankingContext);
+			const rankingDuration = getMonotonicTime() - rankingStart;
 		const displayQuery = query ?? "";
-		this.emptyStateMessage = displayQuery
-			? `No snippets match "${displayQuery}". Showing all snippets.`
-			: null;
+			this.emptyStateMessage = displayQuery
+				? `No snippets match "${displayQuery}". Showing all snippets.`
+				: null;
 			this.logQueryTelemetry({
 				query,
 				fallback: true,

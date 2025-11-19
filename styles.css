@@ -227,6 +227,15 @@ If your plugin does not need CSS, delete this file.
 	border-radius: var(--radius-s);
 }
 
+.snippet-preview-match {
+	font-size: 0.75em;
+	color: var(--text-faint);
+}
+
+.snippet-preview-match.is-hidden {
+	display: none;
+}
+
 .ranking-algorithms-list {
 	display: flex;
 	flex-direction: column;

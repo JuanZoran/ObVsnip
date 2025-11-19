@@ -9,6 +9,8 @@ jest.mock('../src/editorUtils', () => ({
 	getEditorView: jest.fn().mockReturnValue(null),
 }));
 
+import { getActiveEditor } from '../src/editorUtils';
+
 const rankingAlgorithmNames = {
 	"fuzzy-match": "Fuzzy match",
 	"prefix-length": "Prefix length",
@@ -137,6 +139,46 @@ describe('SnippetCompletionMenu UI flow', () => {
 		expect(items.length).toBe(1);
 		expect(items[0].textContent).toContain('apple');
 		menu.close();
+	});
+
+	it('matches suffix subsequence even when extra text precedes the target', () => {
+		const localSnippets = [createSnippet('hello world', 'greeting', 'Hello')];
+		const localMenu = new SnippetCompletionMenu(createApp(), {
+			getSnippets: () => localSnippets,
+			manager,
+			logger: new PluginLogger(),
+			getRankingAlgorithms: () => cloneDefaultRanking(),
+			getUsageCounts: () => new Map(),
+			getRankingAlgorithmNames: () => rankingAlgorithmNames,
+		});
+		const filterResult = (localMenu as any).filterSnippets('ce hel', localSnippets);
+		expect(filterResult.snippets.map((snippet: any) => snippet.prefix)).toEqual(['hello world']);
+		expect(filterResult.matchFields.get(localSnippets[0])).toBe('hel');
+		expect(filterResult.bestCandidate).toBe('hel');
+	});
+
+	it('puts the matched snippet ahead of others when query carries unrelated prefix', () => {
+		const localSnippets = [
+			createSnippet('lim', 'limit'),
+			createSnippet('hello world', 'greeting'),
+		];
+		const localMenu = new SnippetCompletionMenu(createApp(), {
+			getSnippets: () => localSnippets,
+			manager,
+			logger: new PluginLogger(),
+			getRankingAlgorithms: () => cloneDefaultRanking(),
+			getUsageCounts: () => new Map(),
+			getRankingAlgorithmNames: () => rankingAlgorithmNames,
+		});
+		const localEditor = new MockEditor('ce hel');
+		localEditor.setCursor({ line: 0, ch: 'ce hel'.length });
+		(getActiveEditor as jest.Mock).mockReturnValue(localEditor);
+		localMenu.open(localEditor as any, 'ce hel');
+		const entries = (localMenu as any).entries as any[];
+		expect(entries[0].prefix).toBe('hello world');
+		expect(entries.length).toBeGreaterThanOrEqual(1);
+		expect((localMenu as any).emptyStateMessage).toBeNull();
+		localMenu.close();
 	});
 
 	it('includes fuzzy matches even when prefix does not start with the query', () => {
