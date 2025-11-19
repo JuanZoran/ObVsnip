@@ -323,6 +323,10 @@ export const setSnippetWidgetConfig = (config: Partial<SnippetWidgetConfig>): vo
 	widgetConfig = { ...widgetConfig, ...config };
 };
 
+export const getSnippetWidgetConfig = (): SnippetWidgetConfig => ({
+	...widgetConfig,
+});
+
 export const getSnippetSessionStack = (view?: EditorView): SnippetSessionEntry[] | null => {
 	if (!view) return null;
 	try {

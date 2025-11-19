@@ -15,6 +15,7 @@ import { PluginLogger } from "./logger";
 import { getActiveEditor, getEditorView } from "./editorUtils";
 import { getContextBeforeCursor } from "./prefixContext";
 import { getMonotonicTime } from "./telemetry";
+import { getSnippetWidgetConfig } from "./snippetSession";
 
 interface SnippetMenuOptions {
 	getSnippets: () => ParsedSnippet[];
@@ -38,6 +39,58 @@ const matchesFuzzy = (source: string, query: string): boolean => {
 		position += 1;
 	}
 	return true;
+};
+
+const PLACEHOLDER_PATTERN = /\$([0-9]+)/g;
+
+const buildPreviewFragment = (text: string): DocumentFragment => {
+	const fragment = document.createDocumentFragment();
+	const pattern = new RegExp(PLACEHOLDER_PATTERN);
+	let lastIndex = 0;
+	let match: RegExpExecArray | null;
+
+	while ((match = pattern.exec(text))) {
+		const start = match.index;
+		if (start > lastIndex) {
+			fragment.appendChild(document.createTextNode(text.slice(lastIndex, start)));
+		}
+		const placeholder = document.createElement("span");
+		placeholder.className = "preview-placeholder";
+		placeholder.textContent = match[0];
+		fragment.appendChild(placeholder);
+		lastIndex = start + match[0].length;
+	}
+
+	const trailing = text.slice(lastIndex);
+	if (trailing) {
+		const ghostText = document.createElement("span");
+		ghostText.className = "preview-ghost-text";
+		ghostText.textContent = trailing;
+		fragment.appendChild(ghostText);
+	}
+
+	return fragment;
+};
+
+const applyPreviewStyles = (el: HTMLElement): void => {
+	const config = getSnippetWidgetConfig();
+	const styleParts: string[] = [];
+	if (config.placeholderColor) {
+		styleParts.push(`--snippet-placeholder-color:${config.placeholderColor}`);
+	}
+	if (config.placeholderActiveColor) {
+		styleParts.push(`--snippet-placeholder-active-color:${config.placeholderActiveColor}`);
+	}
+	if (config.ghostTextColor) {
+		styleParts.push(`--snippet-ghost-text-color:${config.ghostTextColor}`);
+	}
+	if (config.choiceActiveColor) {
+		styleParts.push(`--snippet-choice-active-color:${config.choiceActiveColor}`);
+	}
+	if (config.choiceInactiveColor) {
+		styleParts.push(`--snippet-choice-inactive-color:${config.choiceInactiveColor}`);
+	}
+	el.style.cssText = styleParts.join(";");
 };
 
 export const formatSnippetPreview = (snippet: ParsedSnippet): string => {
@@ -345,7 +398,11 @@ export class SnippetCompletionMenu {
 
 		this.previewDescEl.toggleClass("is-hidden", !snippet.description);
 
-		this.previewBodyEl.textContent = formatSnippetPreview(snippet);
+		const previewText = formatSnippetPreview(snippet);
+		this.previewBodyEl.textContent = "";
+		const fragment = buildPreviewFragment(previewText);
+		this.previewBodyEl.appendChild(fragment);
+		applyPreviewStyles(this.previewBodyEl);
 
 		if (this.previewStopsEl) {
 			const stops = (snippet.tabStops ?? []).map((stop) => `$${stop.index}`);
