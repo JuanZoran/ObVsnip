@@ -66,6 +66,10 @@ export class SnippetManager {
         }
 
         const session = snippetState.stack.at(-1)!;
+        if (session.currentIndex === 0) {
+            this.logger.debug("manager", `  Already at $0; exiting snippet mode`);
+            return this.exitSnippetMode(editor, options);
+        }
         this.logger.debug("manager", `\n⏭️  JUMP from $${session.currentIndex}:`);
 
         const candidate = this.selectNextTabStop(session);
@@ -438,37 +442,6 @@ export class SnippetManager {
         view.dispatch({ effects: popSnippetSessionEffect.of(undefined) });
     }
 
-    private isSelectionAtStop(editor: Editor, stop: SnippetSessionStop): boolean {
-        const selectionFrom = editor.getCursor('from');
-        const selectionTo = editor.getCursor('to');
-        const cursor = editor.getCursor();
-        const fromOffset = editor.posToOffset(selectionFrom);
-        const toOffset = editor.posToOffset(selectionTo);
-        const cursorOffset = editor.posToOffset(cursor);
-
-        if (fromOffset === stop.start && toOffset === stop.end) {
-            return true;
-        }
-
-        const isZeroLength = stop.start === stop.end;
-        if (!isZeroLength) {
-            return false;
-        }
-        const withinSelection =
-            (fromOffset <= stop.start && toOffset >= stop.start) ||
-            (fromOffset >= stop.start && fromOffset <= stop.end);
-        const hit =
-            cursorOffset === stop.start ||
-            withinSelection;
-        if (hit) {
-            this.logger.debug(
-                "manager",
-                `[Jump] Zero-length stop already satisfied (cursor=${cursorOffset}, start=${stop.start})`
-            );
-        }
-        return hit;
-    }
-
     private getNextTabStopCandidate(
         session: SnippetSessionEntry,
         currentIndex: number
@@ -521,18 +494,25 @@ export class SnippetManager {
         candidate: JumpCandidate,
         options?: { silent?: boolean }
     ): boolean {
-        this.focusStopByOffset(editor, candidate.stop);
+        const previousStop = session.stops.find(
+            (stop) => stop.index === session.currentIndex
+        );
+        const upcoming = this.getNextTabStopCandidate(session, candidate.index);
+        const shouldExit = candidate.index === 0
+            ? this.shouldExitBeforeCachingNextStop(editor, candidate, previousStop)
+            : this.shouldExitBeforeCachingNextStop(editor, upcoming, previousStop);
+        if (shouldExit) {
+            return this.exitSnippetMode(editor, options);
+        }
 
         if (candidate.index === 0) {
+            this.focusStopByOffset(editor, candidate.stop);
+            this.updateSnippetSessionIndex(editor, candidate.index);
             this.logger.debug("manager", `  Reached $0; exiting snippet mode`);
             return this.exitSnippetMode(editor, options);
         }
 
-        const upcoming = this.getNextTabStopCandidate(session, candidate.index);
-        if (this.shouldExitBeforeCachingNextStop(editor, upcoming)) {
-            return this.exitSnippetMode(editor, options);
-        }
-
+        this.focusStopByOffset(editor, candidate.stop);
         this.updateSnippetSessionIndex(editor, candidate.index);
         return true;
     }
@@ -570,7 +550,8 @@ export class SnippetManager {
 
     private shouldExitBeforeCachingNextStop(
         editor: Editor,
-        candidate: { index: number; stop: SnippetSessionStop } | null
+        candidate: { index: number; stop: SnippetSessionStop } | null,
+        currentStop?: SnippetSessionStop
     ): boolean {
         if (!candidate) {
             this.logger.debug("manager", `  No upcoming tab stops; exiting snippet mode`);
@@ -580,20 +561,35 @@ export class SnippetManager {
             return false;
         }
         const stop = candidate.stop;
-        const isZeroLength = stop.start === stop.end;
-        if (!isZeroLength) {
-            return false;
-        }
         const selection = this.getSelectionRange(editor);
-        const isSelectionCollapsed = selection.from === selection.to;
-        const hit = isSelectionCollapsed && selection.from === stop.start;
-        if (hit) {
+        const hasSelection = selection.from !== selection.to;
+        const isZeroLength = stop.start === stop.end;
+        if (isZeroLength && selection.from === selection.to && selection.from >= stop.start) {
+            return true;
+        }
+        const overlapsSelection =
+            hasSelection &&
+            stop.start >= selection.from &&
+            stop.start <= selection.to;
+        if (overlapsSelection) {
             this.logger.debug(
                 "manager",
-                `[Jump] Zero-length stop already satisfied (cursor=${selection.from}, start=${stop.start})`
+                `[Jump] Zero-length stop overlaps selection (${selection.from}-${selection.to}); exiting snippet mode`
             );
+            return true;
         }
-        return hit;
+        if (
+            currentStop &&
+            currentStop.index !== 0 &&
+            stop.start <= currentStop.end
+        ) {
+            this.logger.debug(
+                "manager",
+                `[Jump] $0 overlaps $${currentStop.index}; exiting snippet mode`
+            );
+            return true;
+        }
+        return false;
     }
 
     private exitSnippetMode(editor: Editor, options?: { silent?: boolean }): boolean {
