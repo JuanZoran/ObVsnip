@@ -198,6 +198,62 @@ describe('SnippetManager insertion and jumping edge cases', () => {
 		expect(manager.isSnippetActive(editor as any)).toBe(false);
 	});
 
+	it('keeps nested tab stops valid and updates session after edits', () => {
+		const manager = buildManager();
+		const editor = new MockEditor('');
+		let view = new MockEditorView('');
+		(getEditorView as jest.Mock).mockReturnValue(view);
+		(getActiveEditor as jest.Mock).mockReturnValue(editor);
+
+		const processed = processSnippetBody('outer ${1:${2|Yes,No|} inner} end');
+		const snippet = {
+			prefix: 'nested',
+			body: 'outer ${1:${2|Yes,No|} inner} end',
+			description: '',
+			processedText: processed.text,
+			tabStops: processed.tabStops,
+			variables: processed.variables,
+		} as ParsedSnippet;
+
+		expect(manager.applySnippetAtCursor(snippet, editor as any)).toBe(true);
+
+		const sessionEntry = view.state.field(snippetSessionField)?.slice(-1)[0];
+		const syncedView = new MockEditorView(editor.getText());
+		(getEditorView as jest.Mock).mockReturnValue(syncedView);
+		if (sessionEntry) {
+			syncedView.dispatch({ effects: pushSnippetSessionEffect.of(sessionEntry) });
+		}
+
+		view = syncedView;
+
+		const beforeSession = view.state.field(snippetSessionField)?.slice(-1)[0];
+		const innerStop = beforeSession?.stops.find((stop) => stop.index === 2);
+		expect(innerStop).toBeDefined();
+
+		const insertText = 'PRE-';
+		editor.replaceRange(insertText, editor.offsetToPos(innerStop!.start), editor.offsetToPos(innerStop!.start));
+		view.dispatch({
+			changes: {
+				from: innerStop!.start,
+				to: innerStop!.start,
+				insert: insertText,
+			},
+		});
+
+		const afterSession = view.state.field(snippetSessionField)?.slice(-1)[0];
+		const updatedInnerStop = afterSession?.stops.find((stop) => stop.index === 2);
+		// The start remains anchored (mapPos uses assoc -1), but the end should grow.
+		expect(updatedInnerStop?.start).toBe(innerStop!.start);
+		expect(updatedInnerStop?.end).toBe(innerStop!.end + insertText.length);
+		expect(manager.isSnippetActive(editor as any)).toBe(true);
+
+		const innerFrom = editor.offsetToPos(updatedInnerStop?.start ?? 0);
+		const innerTo = editor.offsetToPos(updatedInnerStop?.end ?? 0);
+		editor.setSelection(innerFrom, innerTo);
+
+		expect(manager.isSnippetActive(editor as any)).toBe(true);
+	});
+
 	it('exits snippet mode when cursor already sits at implicit $0', () => {
 		const manager = buildManager();
 		const editor = new MockEditor('');
