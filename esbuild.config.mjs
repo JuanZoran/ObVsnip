@@ -1,6 +1,8 @@
 import esbuild from "esbuild";
 import process from "process";
 import builtins from "builtin-modules";
+import { copyFileSync, mkdirSync } from "fs";
+import { existsSync } from "fs";
 
 const banner =
 `/*
@@ -37,9 +39,18 @@ const context = await esbuild.context({
 	logLevel: "info",
 	sourcemap: prod ? false : "inline",
 	treeShaking: true,
-	outfile: "main.js",
+	outfile: "build/main.js",
 	minify: prod,
 });
+
+// 确保build目录存在
+if (!existsSync("build")) {
+	mkdirSync("build", { recursive: true });
+}
+
+// 复制manifest.json和styles.css到build目录
+copyFileSync("manifest.json", "build/manifest.json");
+copyFileSync("styles.css", "build/styles.css");
 
 if (prod) {
 	await context.rebuild();
