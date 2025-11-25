@@ -61,6 +61,11 @@ jobs:
           echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
           echo "Tag name: $TAG_NAME"
       
+      - name: Verify GitHub CLI
+        run: |
+          gh --version
+          echo "GitHub CLI is available"
+      
       - name: Create GitHub Release with assets
         run: |
           # Check if release already exists
