@@ -112,43 +112,45 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
-      - name: Upload zip file
-        uses: actions/upload-release-asset@v1
+      - name: Upload release assets
+        run: |
+          # Use PAT if available, otherwise use GITHUB_TOKEN
+          TOKEN="${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}"
+          UPLOAD_URL="${{ steps.create_release.outputs.upload_url }}"
+          VERSION="${{ steps.package-version.outputs.version }}"
+          
+          # Function to upload a file
+          upload_file() {
+            local file_path=$1
+            local file_name=$2
+            local content_type=$3
+            
+            echo "Uploading $file_name..."
+            RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+              -H "Authorization: token $TOKEN" \
+              -H "Content-Type: $content_type" \
+              --data-binary "@$file_path" \
+              "$UPLOAD_URL?name=$file_name")
+            
+            HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+            BODY=$(echo "$RESPONSE" | sed '$d')
+            
+            if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+              echo "✓ Successfully uploaded $file_name"
+            else
+              echo "✗ Failed to upload $file_name (HTTP $HTTP_CODE)"
+              echo "$BODY" | jq '.' 2>/dev/null || echo "$BODY"
+              exit 1
+            fi
+          }
+          
+          # Upload all files
+          upload_file "obvsnip-$VERSION.zip" "obvsnip-$VERSION.zip" "application/zip"
+          upload_file "build/manifest.json" "manifest.json" "application/json"
+          upload_file "build/main.js" "main.js" "application/javascript"
+          upload_file "build/styles.css" "styles.css" "text/css"
+          
+          echo "All files uploaded successfully!"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./obvsnip-${{ steps.package-version.outputs.version }}.zip
-          asset_name: obvsnip-${{ steps.package-version.outputs.version }}.zip
-          asset_content_type: application/zip
-      
-      - name: Upload manifest.json
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./build/manifest.json
-          asset_name: manifest.json
-          asset_content_type: application/json
-      
-      - name: Upload main.js
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./build/main.js
-          asset_name: main.js
-          asset_content_type: application/javascript
-      
-      - name: Upload styles.css
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./build/styles.css
-          asset_name: styles.css
-          asset_content_type: text/css
 
