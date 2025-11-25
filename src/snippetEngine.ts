@@ -7,18 +7,44 @@ export class SnippetEngine {
 	private snippets: ParsedSnippet[] = [];
 	private trie: TrieNode = { children: new Map() };
 	private prefixInfo: PrefixInfo = { minLength: 0, maxLength: 0 };
+	private snippetsHash: string = '';
 
 	constructor(snippets: ParsedSnippet[] = []) {
 		this.setSnippets(snippets);
 	}
 
 	/**
-	 * Set snippets and rebuild Trie
+	 * Set snippets and rebuild Trie only if snippets have changed
 	 */
 	setSnippets(snippets: ParsedSnippet[]): void {
+		const newHash = this.computeSnippetsHash(snippets);
+		if (newHash === this.snippetsHash && snippets === this.snippets) {
+			// Same reference and same content, skip rebuild
+			return;
+		}
+
 		this.snippets = snippets;
+		this.snippetsHash = newHash;
 		this.buildTrie();
 		this.calculatePrefixRange();
+	}
+
+	/**
+	 * Compute a simple hash of snippets for change detection
+	 */
+	private computeSnippetsHash(snippets: ParsedSnippet[]): string {
+		if (snippets.length === 0) {
+			return '';
+		}
+		
+		// Create a hash based on snippet count and prefixes
+		// This is a lightweight check - full equality would be more expensive
+		const prefixList = snippets
+			.map(s => s.prefix)
+			.sort()
+			.join('|');
+		
+		return `${snippets.length}:${prefixList}`;
 	}
 
 	getPrefixInfo(): PrefixInfo {

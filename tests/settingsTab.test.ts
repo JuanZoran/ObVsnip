@@ -1,6 +1,8 @@
 import {
 	TextSnippetsSettingsTab,
 	VirtualTextSchemeControls,
+	RankingSettings,
+	DebugSettings,
 } from "../src/settingsTab";
 import { getLocaleStrings } from "../src/i18n";
 import { DEFAULT_RANKING_ALGORITHMS } from "../src/rankingConfig";
@@ -171,28 +173,30 @@ describe("TextSnippetsSettingsTab debug area", () => {
 
 	it("renders debug modules wrapper and toggles styles predictably", () => {
 		const pluginMock = createPluginMock(false) as unknown as TextSnippetsPlugin;
-		const tab = createTab(pluginMock);
+		const strings = pluginMock.getStrings().settings;
+		const saveAndApplySettings = jest.fn().mockResolvedValue(undefined);
+		const debugSettings = new DebugSettings(pluginMock, strings, saveAndApplySettings);
 		const container = document.createElement("div");
 
-		tab["renderDebugModuleSettings"](
-			container,
-			pluginMock.getStrings().settings
-		);
+		// Access private method via type assertion for testing
+		(debugSettings as any).renderDebugModuleSettings(container);
 
 		expect(container.classList.contains("debug-modules-wrapper")).toBe(
 			true
 		);
 
-		tab["toggleDebugModuleControls"](container, false);
+		(debugSettings as any).toggleDebugModuleControls(container, false);
 		expect(container.style.display).toBe("none");
-		tab["toggleDebugModuleControls"](container, true);
+		(debugSettings as any).toggleDebugModuleControls(container, true);
 		expect(container.style.display).toBe("");
 	});
 
 	it("allows opening built-in variable help irrespective of debug toggle", () => {
 		const pluginMock = createPluginMock(false) as unknown as TextSnippetsPlugin;
-		const tab = createTab(pluginMock);
-		expect(() => tab["showVariableHelp"]()).not.toThrow();
+		const strings = pluginMock.getStrings().settings;
+		const saveAndApplySettings = jest.fn().mockResolvedValue(undefined);
+		const debugSettings = new DebugSettings(pluginMock, strings, saveAndApplySettings);
+		expect(() => (debugSettings as any).showVariableHelp()).not.toThrow();
 	});
 });
 
@@ -242,12 +246,10 @@ describe("TextSnippetsSettingsTab ranking preview", () => {
 			])
 		);
 
-		const tab = createTab(pluginMock);
+		const strings = pluginMock.getStrings().settings;
+		const rankingSettings = new RankingSettings(pluginMock, strings);
 		const container = document.createElement("div");
-		tab["renderRankingPreview"](
-			container,
-			pluginMock.getStrings().settings
-		);
+		(rankingSettings as any).renderRankingPreview(container);
 
 		const entries = container.querySelectorAll(".ranking-preview-entry");
 		expect(entries.length).toBeGreaterThanOrEqual(1);

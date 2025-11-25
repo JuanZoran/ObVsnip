@@ -193,60 +193,17 @@ class SnippetBodyParser {
 			}
 
 			if (ch === '$') {
-				if (this.peek() === '$') {
-					text += '$';
-					this.index += 2;
+				const dollarResult = this.handleDollarChar(text, placeholders, variables);
+				if (dollarResult.textAdded) {
+					text += dollarResult.text;
 					continue;
 				}
-
-			const placeholder = this.parsePlaceholder();
-			if (placeholder) {
-				const start = text.length;
-				text += placeholder.text;
-					const end = text.length;
-					placeholders.push({ index: placeholder.index, start, end, choices: placeholder.choices });
-				for (const inner of placeholder.inner) {
-					placeholders.push({
-						index: inner.index,
-						start: start + inner.start,
-						end: start + inner.end,
-					});
-				}
-				for (const variable of placeholder.variables) {
-					variables.push({
-						name: variable.name,
-						start: start + variable.start,
-						end: start + variable.end,
-						defaultValue: variable.defaultValue,
-					});
-				}
-				continue;
 			}
 
-				const variable = this.parseVariable();
-				if (variable) {
-					const start = text.length;
-					text += variable.text;
-					const end = text.length;
-					variables.push({
-						name: variable.name,
-						start,
-						end,
-						defaultValue: variable.defaultValue,
-					});
-					continue;
-				}
-
-				text += '$';
-				this.index++;
-				continue;
-			}
-
-			if (ch === '\\' && this.index + 1 < this.source.length) {
-				const next = this.source[this.index + 1];
-				if (next === '$' || next === '{' || next === '}') {
-					text += next;
-					this.index += 2;
+			if (ch === '\\') {
+				const escapeResult = this.handleEscapeChar();
+				if (escapeResult) {
+					text += escapeResult;
 					continue;
 				}
 			}
@@ -258,6 +215,102 @@ class SnippetBodyParser {
 		return { text, placeholders, variables, terminated };
 	}
 
+	private handleDollarChar(
+		currentText: string,
+		placeholders: ParsedPlaceholderRange[],
+		variables: ParsedVariableRange[]
+	): { text: string; textAdded: boolean } {
+		if (this.peek() === '$') {
+			this.index += 2;
+			return { text: '$', textAdded: true };
+		}
+
+		const placeholder = this.parsePlaceholder();
+		if (placeholder) {
+			this.addPlaceholderToResults(
+				currentText,
+				placeholder,
+				placeholders,
+				variables
+			);
+			return { text: placeholder.text, textAdded: true };
+		}
+
+		const variable = this.parseVariable();
+		if (variable) {
+			this.addVariableToResults(currentText, variable, variables);
+			return { text: variable.text, textAdded: true };
+		}
+
+		// Unmatched $, treat as literal
+		this.index++;
+		return { text: '$', textAdded: true };
+	}
+
+	private addPlaceholderToResults(
+		currentText: string,
+		placeholder: PlaceholderParseResult,
+		placeholders: ParsedPlaceholderRange[],
+		variables: ParsedVariableRange[]
+	): void {
+		const start = currentText.length;
+		const end = start + placeholder.text.length;
+		
+		placeholders.push({
+			index: placeholder.index,
+			start,
+			end,
+			choices: placeholder.choices,
+		});
+		
+		for (const inner of placeholder.inner) {
+			placeholders.push({
+				index: inner.index,
+				start: start + inner.start,
+				end: start + inner.end,
+			});
+		}
+		
+		for (const variable of placeholder.variables) {
+			variables.push({
+				name: variable.name,
+				start: start + variable.start,
+				end: start + variable.end,
+				defaultValue: variable.defaultValue,
+			});
+		}
+	}
+
+	private addVariableToResults(
+		currentText: string,
+		variable: VariableParseResult,
+		variables: ParsedVariableRange[]
+	): void {
+		const start = currentText.length;
+		const end = start + variable.text.length;
+		
+		variables.push({
+			name: variable.name,
+			start,
+			end,
+			defaultValue: variable.defaultValue,
+		});
+	}
+
+	private handleEscapeChar(): string | null {
+		if (this.index + 1 >= this.source.length) {
+			return null;
+		}
+		
+		const next = this.source[this.index + 1];
+		if (next === '$' || next === '{' || next === '}') {
+			this.index += 2;
+			return next;
+		}
+		
+		return null;
+	}
+
 	private parsePlaceholder(): PlaceholderParseResult | null {
 		const startIndex = this.index;
 		this.index++; // skip '$'
@@ -266,28 +319,9 @@ class SnippetBodyParser {
 			return null;
 		}
 
-		const buildPlaceholder = (
-			index: number,
-			text: string,
-			inner: ParsedPlaceholderRange[] = [],
-			variables: ParsedVariableRange[] = [],
-			choices?: string[]
-		): PlaceholderParseResult => ({
-			index,
-			text,
-			inner,
-			variables,
-			choices,
-		});
-
 		const ch = this.source[this.index];
 		if (this.isDigit(ch)) {
-			const digits = this.readNumber();
-			if (digits.length === 0) {
-				this.index = startIndex;
-				return null;
-			}
-			return buildPlaceholder(parseInt(digits, 10), '');
+			return this.parseSimplePlaceholder(startIndex);
 		}
 
 		if (ch !== '{') {
@@ -295,6 +329,24 @@ class SnippetBodyParser {
 			return null;
 		}
 
+		return this.parseBracePlaceholder(startIndex);
+	}
+
+	private parseSimplePlaceholder(startIndex: number): PlaceholderParseResult | null {
+		const digits = this.readNumber();
+		if (digits.length === 0) {
+			this.index = startIndex;
+			return null;
+		}
+		return {
+			index: parseInt(digits, 10),
+			text: '',
+			inner: [],
+			variables: [],
+		};
+	}
+
+	private parseBracePlaceholder(startIndex: number): PlaceholderParseResult | null {
 		this.index++; // skip '{'
 		const digits = this.readNumber();
 		if (digits.length === 0 || Number.isNaN(Number(digits))) {
@@ -303,48 +355,86 @@ class SnippetBodyParser {
 		}
 		const placeholderIndex = parseInt(digits, 10);
 
-		if (this.source[this.index] === '}') {
-			this.index++;
-			return buildPlaceholder(placeholderIndex, '');
+		if (this.index >= this.source.length) {
+			this.index = startIndex;
+			return null;
 		}
 
-		if (this.source[this.index] === '|') {
+		const ch = this.source[this.index];
+		
+		if (ch === '}') {
 			this.index++;
-			const choices = this.readChoiceList();
-			if (!choices) {
-				this.index = startIndex;
-				return null;
-			}
-			if (this.source[this.index] !== '}') {
-				this.index = startIndex;
-				return null;
-			}
-			this.index++;
-			return buildPlaceholder(placeholderIndex, choices[0] ?? '', [], [], choices);
+			return this.buildPlaceholder(placeholderIndex, '', [], []);
 		}
 
-		if (this.source[this.index] === ':') {
-			this.index++;
-			const segment = this.parseSegment('}');
-			if (!segment.terminated) {
-				this.index = startIndex;
-				return null;
-			}
-			return buildPlaceholder(
-				placeholderIndex,
-				segment.text,
-				segment.placeholders,
-				segment.variables
-			);
+		if (ch === '|') {
+			return this.parseChoicePlaceholder(startIndex, placeholderIndex);
 		}
 
-		if (this.source[this.index] === '}') {
-			this.index++;
-			return buildPlaceholder(placeholderIndex, '');
+		if (ch === ':') {
+			return this.parseDefaultPlaceholder(startIndex, placeholderIndex);
 		}
 
 		this.index = startIndex;
 		return null;
+	}
+
+	private parseChoicePlaceholder(
+		startIndex: number,
+		placeholderIndex: number
+	): PlaceholderParseResult | null {
+		this.index++; // skip '|'
+		const choices = this.readChoiceList();
+		if (!choices) {
+			this.index = startIndex;
+			return null;
+		}
+		if (this.index >= this.source.length || this.source[this.index] !== '}') {
+			this.index = startIndex;
+			return null;
+		}
+		this.index++;
+		return this.buildPlaceholder(
+			placeholderIndex,
+			choices[0] ?? '',
+			[],
+			[],
+			choices
+		);
+	}
+
+	private parseDefaultPlaceholder(
+		startIndex: number,
+		placeholderIndex: number
+	): PlaceholderParseResult | null {
+		this.index++; // skip ':'
+		const segment = this.parseSegment('}');
+		if (!segment.terminated) {
+			this.index = startIndex;
+			return null;
+		}
+		return this.buildPlaceholder(
+			placeholderIndex,
+			segment.text,
+			segment.placeholders,
+			segment.variables
+		);
+	}
+
+	private buildPlaceholder(
+		index: number,
+		text: string,
+		inner: ParsedPlaceholderRange[] = [],
+		variables: ParsedVariableRange[] = [],
+		choices?: string[]
+	): PlaceholderParseResult {
+		return {
+			index,
+			text,
+			inner,
+			variables,
+			choices,
+		};
 	}
 
 	private parseVariable(): VariableParseResult | null {

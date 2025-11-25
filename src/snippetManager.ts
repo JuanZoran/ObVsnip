@@ -29,6 +29,7 @@ import {
 	buildReferenceStopLinks,
 } from "./utils/stopUtils";
 import { adjustStopPositionsAfterReplacement, recalculateStopPositions, getSelectionOffsets, posToOffset, offsetToPos } from "./utils/positionUtils";
+import { ReferenceSyncService } from "./utils/referenceSyncService";
 import {
     JumpCandidate,
     TabStopJumpStrategySelector,
@@ -45,6 +46,7 @@ type SnippetManagerOptions = {
 export class SnippetManager {
 	private jumpStrategySelector: TabStopJumpStrategySelector;
 	private placeholderStrategySelector: TabStopPlaceholderStrategySelector;
+	private referenceSyncService: ReferenceSyncService;
 
 	constructor(
 		private app: App,
@@ -54,6 +56,7 @@ export class SnippetManager {
 	) {
 		this.jumpStrategySelector = new TabStopJumpStrategySelector();
 		this.placeholderStrategySelector = new TabStopPlaceholderStrategySelector();
+		this.referenceSyncService = new ReferenceSyncService(logger);
 		
 		// Register realtime sync callback
 		this.registerRealtimeSyncCallback();
@@ -106,7 +109,7 @@ export class SnippetManager {
 			if (currentStop && isReferenceStop(currentStop) && 
 			    currentStop.index === latestSession.currentIndex) {
 				// Sync reference stops using the currentStop from ViewPlugin (positions are mapped)
-				const updatedStops = this.syncReferenceStops(editor, currentStop, latestSession, 'realtime');
+				const updatedStops = this.referenceSyncService.syncReferenceStops(editor, currentStop, latestSession, 'realtime');
 				
 				// If stops were updated, update the session with new positions
 				if (updatedStops) {
@@ -276,10 +279,15 @@ export class SnippetManager {
         return !!stack && stack.length > 0;
     }
 
-    private insertSnippet(editor: Editor, snippet: ParsedSnippet, startPos: EditorPosition, endPos: EditorPosition): boolean {
+    private processSnippetBodyIfNeeded(snippet: ParsedSnippet): {
+        text: string;
+        tabStops: TabStopInfo[];
+        variables: SnippetVariableInfo[] | undefined;
+    } {
         let text = snippet.processedText;
         let tabStops = snippet.tabStops;
         let variables = snippet.variables;
+        
         if (!text || !tabStops || tabStops.length === 0 || !variables) {
             const processed = processSnippetBody(snippet.body, this.logger);
             text = processed.text;
@@ -289,34 +297,42 @@ export class SnippetManager {
             snippet.tabStops = tabStops;
             snippet.variables = variables;
         }
+        
+        return { text, tabStops, variables };
+    }
 
-        const variableResult = this.applyVariablesToText(
-            text,
-            tabStops,
-            variables,
-            editor
+    private handleSnippetWithoutTabStops(
+        editor: Editor,
+        snippet: ParsedSnippet,
+        baseOffset: number,
+        text: string,
+        tabStops: TabStopInfo[]
+    ): boolean {
+        const zeroStop = tabStops.find((stop) => stop.index === 0);
+        const targetOffset =
+            zeroStop?.start !== undefined
+                ? baseOffset + zeroStop.start
+                : baseOffset + text.length;
+        editor.setCursor(offsetToPos(editor, targetOffset));
+        this.logger.debug(
+            "manager",
+            "Snippet expanded without tab stops; staying in normal mode."
         );
-        text = variableResult.text;
-        tabStops = variableResult.tabStops;
+        this.notifySnippetApplied(snippet);
+        return true;
+    }
 
-        editor.replaceRange(text, startPos, endPos);
-
-		const baseOffset = posToOffset(editor, startPos);
-		const positiveStops = tabStops.filter((t) => t.index > 0);
-		const firstTabStop = positiveStops.sort((a, b) => a.index - b.index)[0];
+    private initializeTabStops(
+        editor: Editor,
+        snippet: ParsedSnippet,
+        baseOffset: number,
+        tabStops: TabStopInfo[]
+    ): void {
+        const positiveStops = tabStops.filter((t) => t.index > 0);
+        const firstTabStop = positiveStops.sort((a, b) => a.index - b.index)[0];
+        
         if (!firstTabStop) {
-            const zeroStop = tabStops.find((stop) => stop.index === 0);
-            const targetOffset =
-                zeroStop?.start !== undefined
-                    ? baseOffset + zeroStop.start
-                    : baseOffset + text.length;
-            editor.setCursor(offsetToPos(editor, targetOffset));
-            this.logger.debug(
-                "manager",
-                "Snippet expanded without tab stops; staying in normal mode."
-            );
-            this.notifySnippetApplied(snippet);
-            return true;
+            return;
         }
 
         const firstStopAbsolute: SnippetSessionStop = {
@@ -327,12 +343,38 @@ export class SnippetManager {
             type: firstTabStop.type,
             referenceGroup: firstTabStop.referenceGroup,
         };
+        
         this.focusStopByOffset(editor, firstStopAbsolute);
         this.pushSnippetSession(editor, baseOffset, tabStops, firstTabStop.index);
         
         // Call placeholder strategy initialization
         const placeholderStrategy = this.placeholderStrategySelector.getStrategy(firstStopAbsolute);
         placeholderStrategy.onStopInitialized?.(editor, firstStopAbsolute);
+    }
+
+    private insertSnippet(editor: Editor, snippet: ParsedSnippet, startPos: EditorPosition, endPos: EditorPosition): boolean {
+        const { text: initialText, tabStops: initialTabStops, variables } = this.processSnippetBodyIfNeeded(snippet);
+
+        const variableResult = this.applyVariablesToText(
+            initialText,
+            initialTabStops,
+            variables,
+            editor
+        );
+        const text = variableResult.text;
+        const tabStops = variableResult.tabStops;
+
+        editor.replaceRange(text, startPos, endPos);
+
+        const baseOffset = posToOffset(editor, startPos);
+        const positiveStops = tabStops.filter((t) => t.index > 0);
+        const firstTabStop = positiveStops.sort((a, b) => a.index - b.index)[0];
+        
+        if (!firstTabStop) {
+            return this.handleSnippetWithoutTabStops(editor, snippet, baseOffset, text, tabStops);
+        }
+
+        this.initializeTabStops(editor, snippet, baseOffset, tabStops);
 
         this.logger.debug("manager", `✨ Expanded snippet: ${snippet.prefix} | Entered snippet mode`);
         this.notifySnippetApplied(snippet);
@@ -564,6 +606,75 @@ export class SnippetManager {
             : strategy.selectPrev(session, session.currentIndex);
     }
 
+    private shouldSyncBeforeJump(
+        previousStop: SnippetSessionStop | undefined,
+        settings: PluginSettings | undefined
+    ): boolean {
+        return !!(
+            previousStop &&
+            isReferenceStop(previousStop) &&
+            settings?.referenceSnippetEnabled &&
+            settings.referenceSyncMode === 'on-jump'
+        );
+    }
+
+    private syncAndUpdateSession(
+        editor: Editor,
+        previousStop: SnippetSessionStop,
+        session: SnippetSessionEntry
+    ): SnippetSessionEntry {
+        const view = this.requireEditorView(editor);
+        if (!view) return session;
+
+        const updatedStops = this.referenceSyncService.syncReferenceStops(
+            editor,
+            previousStop,
+            session,
+            'on-jump'
+        );
+
+        if (updatedStops) {
+            const updatedSession: SnippetSessionEntry = {
+                ...session,
+                stops: updatedStops,
+            };
+            view.dispatch({
+                effects: replaceSnippetSessionEffect.of(updatedSession),
+            });
+            return updatedSession;
+        }
+
+        return session;
+    }
+
+    private updateCandidateWithSyncedStops(
+        candidate: JumpCandidate,
+        session: SnippetSessionEntry
+    ): JumpCandidate {
+        const updatedStop = session.stops.find(
+            (stop) => stop.index === candidate.index
+        );
+        return updatedStop
+            ? { index: candidate.index, stop: updatedStop }
+            : candidate;
+    }
+
+    private shouldExitAfterJump(
+        editor: Editor,
+        candidate: JumpCandidate,
+        session: SnippetSessionEntry,
+        previousStop: SnippetSessionStop | undefined
+    ): boolean {
+        const candidateStop = findStopByIndex(session, candidate.index);
+        const upcoming = candidateStop
+            ? this.selectTabStopWithStrategy(session, candidateStop, 'next')
+            : null;
+
+        return candidate.index === 0
+            ? this.shouldExitBeforeCachingNextStop(editor, candidate, previousStop)
+            : this.shouldExitBeforeCachingNextStop(editor, upcoming, previousStop);
+    }
+
     private completeNextJumpTransition(
         editor: Editor,
         session: SnippetSessionEntry,
@@ -572,69 +683,35 @@ export class SnippetManager {
     ): boolean {
         const previousStop = getCurrentStop(session);
         const settings = this.options?.getSettings?.();
-        const view = this.requireEditorView(editor);
-        
+
         // Sync reference stops before jumping (if on-jump mode)
-        let updatedStops: SnippetSessionStop[] | null = null;
-        if (previousStop && isReferenceStop(previousStop)) {
-            if (settings?.referenceSnippetEnabled && settings.referenceSyncMode === 'on-jump') {
-                updatedStops = this.syncReferenceStops(editor, previousStop, session, 'on-jump');
-                // If stops were updated, we need to update the session with new positions
-                if (updatedStops && view) {
-                    // Update the session with corrected stop positions
-                    const updatedSession: SnippetSessionEntry = {
-                        ...session,
-                        stops: updatedStops,
-                    };
-                    view.dispatch({
-                        effects: replaceSnippetSessionEffect.of(updatedSession),
-                    });
-                    // Update local session reference for subsequent operations
-                    session = updatedSession;
-                }
-            }
+        let finalSession = session;
+        if (this.shouldSyncBeforeJump(previousStop, settings)) {
+            finalSession = this.syncAndUpdateSession(editor, previousStop!, session);
+            candidate = this.updateCandidateWithSyncedStops(candidate, finalSession);
         }
-        
-        // Re-fetch candidate stop with updated positions if sync happened
-        let finalCandidate = candidate;
-        if (updatedStops) {
-            const updatedCandidateStop = updatedStops.find(
-                (stop) => stop.index === candidate.index
-            );
-            if (updatedCandidateStop) {
-                finalCandidate = {
-                    index: candidate.index,
-                    stop: updatedCandidateStop,
-                };
-            }
-        }
-        
-        // Get the next stop after the candidate using strategy
-        const candidateStop = findStopByIndex(session, finalCandidate.index);
-        const upcoming = candidateStop 
-            ? this.selectTabStopWithStrategy(session, candidateStop, 'next')
-            : null;
-        const shouldExit = finalCandidate.index === 0
-            ? this.shouldExitBeforeCachingNextStop(editor, finalCandidate, previousStop)
-            : this.shouldExitBeforeCachingNextStop(editor, upcoming, previousStop);
-        if (shouldExit) {
+
+        // Check if we should exit before jumping
+        if (this.shouldExitAfterJump(editor, candidate, finalSession, previousStop)) {
             return this.exitSnippetMode(editor, options);
         }
 
-        if (finalCandidate.index === 0) {
-            this.focusStopByOffset(editor, finalCandidate.stop);
-            this.updateSnippetSessionIndex(editor, finalCandidate.index);
+        // Handle exit case at $0
+        if (candidate.index === 0) {
+            this.focusStopByOffset(editor, candidate.stop);
+            this.updateSnippetSessionIndex(editor, candidate.index);
             this.logger.debug("manager", `  Reached $0; exiting snippet mode`);
             return this.exitSnippetMode(editor, options);
         }
 
-        this.focusStopByOffset(editor, finalCandidate.stop);
-        this.updateSnippetSessionIndex(editor, finalCandidate.index);
-        
+        // Perform the jump
+        this.focusStopByOffset(editor, candidate.stop);
+        this.updateSnippetSessionIndex(editor, candidate.index);
+
         // Call placeholder strategy focus handler
-        const placeholderStrategy = this.placeholderStrategySelector.getStrategy(finalCandidate.stop);
-        placeholderStrategy.onStopFocused?.(editor, finalCandidate.stop);
-        
+        const placeholderStrategy = this.placeholderStrategySelector.getStrategy(candidate.stop);
+        placeholderStrategy.onStopFocused?.(editor, candidate.stop);
+
         return true;
     }
 
@@ -722,134 +799,6 @@ export class SnippetManager {
             new Notice("✅ No more tab stops");
         }
         return false;
-    }
-
-
-    /**
-     * Calculate the actual text range for a stop, accounting for user input that may extend beyond stop.end
-     * @param currentStop The stop to calculate the range for
-     * @param view The CodeMirror EditorView
-     * @returns Object with actualStart, actualEnd, and the text content
-     */
-    private calculateActualTextRange(
-        currentStop: SnippetSessionStop,
-        view: EditorView
-    ): { actualStart: number; actualEnd: number; text: string } {
-        const selection = view.state.selection.main;
-        const actualStart = currentStop.start;
-        
-        // When user is typing, the cursor/selection indicates where the actual text ends
-        // Use selection end if it extends into or beyond the stop, otherwise use stop.end
-        const selectionEnd = (selection.from >= currentStop.start || selection.to > currentStop.start)
-            ? selection.to
-            : currentStop.end;
-        const actualEnd = Math.min(
-            Math.max(selectionEnd, currentStop.end),
-            view.state.doc.length
-        );
-        
-        // Read actual text from CodeMirror document state (more accurate than editor.getRange)
-        const text = view.state.doc.sliceString(actualStart, actualEnd);
-        
-        return { actualStart, actualEnd, text };
-    }
-
-    /**
-     * Sync reference stops - update all linked stops with the content of the current stop
-     * Returns updated stops array with corrected positions after sync
-     */
-    private syncReferenceStops(
-        editor: Editor,
-        currentStop: SnippetSessionStop,
-        session: SnippetSessionEntry,
-        mode: 'realtime' | 'on-jump'
-    ): SnippetSessionStop[] | null {
-        if (!isReferenceStop(currentStop) || !currentStop.linkedStops) {
-            return null;
-        }
-
-        const view = this.requireEditorView(editor);
-        if (!view) return null;
-
-        // Calculate the actual text range for the current stop
-        const { actualStart, actualEnd, text: currentText } = this.calculateActualTextRange(currentStop, view);
-
-        // Find current stop index in session.stops
-        // Use index and referenceGroup to find the correct stop, as positions may have changed
-        const currentStopIndex = session.stops.findIndex(
-            (stop) => stop.index === currentStop.index && 
-                      isReferenceStop(stop) &&
-                      stop.referenceGroup === currentStop.referenceGroup &&
-                      stop.start === currentStop.start
-        );
-
-        // Collect updates for linked stops that differ from current text
-        const updates: Array<{ from: number; to: number; text: string; linkedIndex: number }> = [];
-        for (const linkedIndex of currentStop.linkedStops) {
-            const linkedStop = session.stops[linkedIndex];
-            if (!linkedStop || !isReferenceStop(linkedStop)) {
-                continue;
-            }
-
-            const linkedText = view.state.doc.sliceString(linkedStop.start, linkedStop.end);
-            if (linkedText !== currentText) {
-                updates.push({
-                    from: linkedStop.start,
-                    to: linkedStop.end,
-                    text: currentText,
-                    linkedIndex,
-                });
-            }
-        }
-
-        // Create updated stops array
-        const updatedStops = session.stops.map(stop => ({ ...stop }));
-
-        // Update current stop's end position to reflect actual text length
-        if (currentStopIndex >= 0) {
-            const actualTextEnd = actualStart + currentText.length;
-            updatedStops[currentStopIndex] = {
-                ...updatedStops[currentStopIndex],
-                start: actualStart,
-                end: actualTextEnd,
-            };
-        }
-
-        if (updates.length === 0) {
-            // No changes to linked stops, but return updated stops if current stop position was corrected
-            return (currentStopIndex >= 0 && updatedStops[currentStopIndex].end !== (currentStop.start + currentText.length))
-                ? updatedStops
-                : null;
-        }
-
-        // Sort updates from end to start to preserve positions when applying
-        updates.sort((a, b) => b.from - a.from);
-        
-        // Calculate length differences and build changes array
-        const updateDiffs = updates.map(update => ({
-            position: update.from,
-            diff: update.text.length - (update.to - update.from),
-            linkedIndex: update.linkedIndex,
-            newLength: update.text.length,
-        }));
-        
-        const changes = updates.map(update => ({
-            from: update.from,
-            to: update.to,
-            insert: update.text,
-        }));
-        
-        // Dispatch transaction with all changes atomically
-        view.dispatch({
-            changes,
-            annotations: [Transaction.userEvent.of('snippet-sync')],
-        });
-        
-        // Recalculate positions for all stops after text updates
-        recalculateStopPositions(updatedStops, session.stops, updateDiffs, currentStopIndex);
-
-        this.logger.debug("manager", `🔄 Synced ${updates.length} reference stops (mode: ${mode})`);
-        return updatedStops;
     }
 
 

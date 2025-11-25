@@ -258,6 +258,20 @@ export class SnippetCompletionMenu {
 		return this.options.getSnippets().filter((snippet) => !snippet.hide);
 	}
 
+	/**
+	 * Check if a snippet matches a query candidate
+	 */
+	private matchSnippet(snippet: ParsedSnippet, candidate: string): boolean {
+		const prefixLower = snippet.prefix.toLowerCase();
+		const descLower = snippet.description?.toLowerCase();
+
+		return (
+			prefixLower.startsWith(candidate) ||
+			matchesFuzzy(prefixLower, candidate) ||
+			(descLower?.includes(candidate) ?? false)
+		);
+	}
+
 	private filterSnippets(
 		query: string,
 		candidates?: ParsedSnippet[]
@@ -267,7 +281,6 @@ export class SnippetCompletionMenu {
 		bestCandidate: string | undefined;
 	} {
 		const normalized = query.trim().toLowerCase();
-
 		const snippets = candidates ?? this.getVisibleSnippets();
 
 		if (!normalized) {
@@ -279,59 +292,41 @@ export class SnippetCompletionMenu {
 		}
 
 		const suffixes = this.buildSuffixCandidates(normalized);
-
-		const matchInfo = new Map<
-			ParsedSnippet,
-			{ length: number; value: string }
-		>();
-		let bestCandidate: string | undefined;
-
+		const matchInfo = new Map<ParsedSnippet, { length: number; value: string }>();
 		let hasAnyMatchOverall = false;
 
+		// Try each suffix candidate from longest to shortest
 		for (const candidate of suffixes) {
 			let matchedAny = false;
+
 			for (const snippet of snippets) {
-				const prefixLower = snippet.prefix.toLowerCase();
-				const descLower = snippet.description?.toLowerCase();
-				let matched = false;
-
-				if (prefixLower.startsWith(candidate)) {
-					matched = true;
-				} else if (matchesFuzzy(prefixLower, candidate)) {
-					matched = true;
-				} else if (descLower?.includes(candidate)) {
-					matched = true;
-				}
-
-				if (!matched) continue;
+				if (!this.matchSnippet(snippet, candidate)) continue;
 
 				matchedAny = true;
 				hasAnyMatchOverall = true;
 				const previous = matchInfo.get(snippet);
+				// Keep the longest matching candidate
 				if (!previous || candidate.length > previous.length) {
 					matchInfo.set(snippet, { length: candidate.length, value: candidate });
 				}
 			}
 
+			// Early exit only if no matches found and we haven't found any matches yet
 			if (!matchedAny && !hasAnyMatchOverall) {
 				break;
 			}
 		}
 
-		const acceptedSnippets = snippets.filter((snippet) =>
-			matchInfo.has(snippet)
-		);
+		// Build results
+		const acceptedSnippets = Array.from(matchInfo.keys());
 		const matchFields = new Map<ParsedSnippet, string>();
 		for (const [snippet, info] of matchInfo.entries()) {
 			matchFields.set(snippet, info.value);
 		}
 
-		const candidateFromMatches = Array.from(matchInfo.values())
-			.sort((a, b) => b.length - a.length)
-			.map((entry) => entry.value)[0];
-		if (candidateFromMatches) {
-			bestCandidate = candidateFromMatches;
-		}
+		// Find the best candidate (longest match)
+		const bestCandidate = Array.from(matchInfo.values())
+			.sort((a, b) => b.length - a.length)[0]?.value;
 
 		return {
 			snippets: acceptedSnippets,
@@ -569,49 +564,68 @@ export class SnippetCompletionMenu {
 	} | null {
 		const prefixInfo = this.options.getPrefixInfo?.();
 		if (!prefixInfo?.maxLength) return null;
+		
 		const context = getContextBeforeCursor({
 			editor,
 			prefixInfo,
 		});
 		if (!context) return null;
+		
 		const cursor = editor.getCursor();
 		let from = offsetToPos(editor, context.startOffset);
 		const span = context.endOffset - context.startOffset;
 		const windowLimited =
 			span >= prefixInfo.maxLength && prefixInfo.maxLength > 0;
-		let text = context.text;
-		let range = {
-			from,
-			to: cursor,
-		};
+		
+		if (!windowLimited) {
+			return {
+				text: context.text,
+				range: { from, to: cursor },
+				windowLimited: false,
+			};
+		}
 
-		if (windowLimited) {
-			const previousLineContext = this.getPreviousLineBeforeCursor(
-				editor,
-				cursor
-			);
-			if (previousLineContext) {
-				text = previousLineContext.text;
-				range = previousLineContext.range;
-				from = range.from;
-			} else if (from.line === cursor.line) {
-				const line = editor.getLine(cursor.line) ?? "";
-				const expandedStart = this.expandQueryStart(line, from.ch);
-				if (expandedStart !== from.ch) {
-					text = line.slice(expandedStart, cursor.ch);
-					range = {
+		return this.resolveWindowLimitedContext(editor, cursor, from, context.text);
+	}
+
+	private resolveWindowLimitedContext(
+		editor: Editor,
+		cursor: EditorPosition,
+		from: EditorPosition,
+		initialText: string
+	): {
+		text: string;
+		range: { from: EditorPosition; to: EditorPosition };
+		windowLimited: boolean;
+	} {
+		const previousLineContext = this.getPreviousLineBeforeCursor(editor, cursor);
+		if (previousLineContext) {
+			return {
+				text: previousLineContext.text,
+				range: previousLineContext.range,
+				windowLimited: true,
+			};
+		}
+
+		if (from.line === cursor.line) {
+			const line = editor.getLine(cursor.line) ?? "";
+			const expandedStart = this.expandQueryStart(line, from.ch);
+			if (expandedStart !== from.ch) {
+				return {
+					text: line.slice(expandedStart, cursor.ch),
+					range: {
 						from: { line: cursor.line, ch: expandedStart },
 						to: cursor,
-					};
-					from = range.from;
-				}
+					},
+					windowLimited: true,
+				};
 			}
 		}
 
 		return {
-			text,
-			range,
-			windowLimited,
+			text: initialText,
+			range: { from, to: cursor },
+			windowLimited: true,
 		};
 	}
 
@@ -666,10 +680,12 @@ export class SnippetCompletionMenu {
 		editor: Editor,
 		provided?: string
 	): { text: string; range: { from: EditorPosition; to: EditorPosition } } {
+		// Try to resolve query context with prefix info
 		const resolved = this.resolveQueryContext(editor);
 		if (resolved) {
 			const spansMultipleLines =
 				resolved.range.from.line !== resolved.range.to.line;
+			// Use regex fallback for multi-line window-limited queries
 			if (resolved.windowLimited && spansMultipleLines) {
 				return this.buildRegexQueryContext(editor);
 			}
@@ -678,6 +694,8 @@ export class SnippetCompletionMenu {
 				range: resolved.range,
 			};
 		}
+
+		// Use provided query if available
 		if (provided && provided.length > 0) {
 			const cursor = editor.getCursor();
 			const startCh = Math.max(0, cursor.ch - provided.length);
@@ -689,8 +707,9 @@ export class SnippetCompletionMenu {
 				},
 			};
 		}
-		const fallback = this.buildRegexQueryContext(editor);
-		return fallback;
+
+		// Final fallback: regex-based query context
+		return this.buildRegexQueryContext(editor);
 	}
 
 	private positionContainer(coords: { top: number; left: number }): void {
@@ -723,12 +742,60 @@ export class SnippetCompletionMenu {
 		this.hadInitialSelection = from.line !== to.line || from.ch !== to.ch;
 	}
 
+	private tryPrefixMatch(
+		snippet: ParsedSnippet,
+		editor: Editor,
+		cursor: EditorPosition
+	): { from: EditorPosition; to: EditorPosition } | null {
+		const prefix = snippet.prefix;
+		const startCh = cursor.ch - prefix.length;
+		if (startCh < 0) return null;
+
+		const from = { line: cursor.line, ch: startCh };
+		const existingText = editor.getRange(from, cursor);
+		if (existingText && existingText.toLowerCase() === prefix.toLowerCase()) {
+			return { from, to: cursor };
+		}
+		return null;
+	}
+
+	private tryPrefixOverlapMatch(
+		snippet: ParsedSnippet,
+		editor: Editor,
+		cursor: EditorPosition
+	): { from: EditorPosition; to: EditorPosition } | null {
+		const overlapLength = this.findPrefixOverlapLength(snippet, editor);
+		if (overlapLength > 0) {
+			return {
+				from: { line: cursor.line, ch: cursor.ch - overlapLength },
+				to: cursor,
+			};
+		}
+		return null;
+	}
+
+	private tryMatchFieldMatch(
+		snippet: ParsedSnippet,
+		cursor: EditorPosition
+	): { from: EditorPosition; to: EditorPosition } | null {
+		const matchField = this.getMatchField(snippet);
+		if (matchField && matchField.length > 0) {
+			const fromCh = Math.max(0, cursor.ch - matchField.length);
+			return {
+				from: { line: cursor.line, ch: fromCh },
+				to: cursor,
+			};
+		}
+		return null;
+	}
+
 	private getReplacementRange(
 		snippet: ParsedSnippet,
 		editor: Editor
 	): { from: EditorPosition; to: EditorPosition } {
 		const cursor = editor.getCursor();
 
+		// Early returns for special cases
 		if (this.emptyStateMessage) {
 			return { from: cursor, to: cursor };
 		}
@@ -740,48 +807,21 @@ export class SnippetCompletionMenu {
 			};
 		}
 
-		const prefix = snippet.prefix;
-		const startCh = cursor.ch - prefix.length;
-		if (startCh >= 0) {
-			const from = { line: cursor.line, ch: startCh };
-			const existingText = editor.getRange(from, cursor);
-			if (
-				existingText &&
-				existingText.toLowerCase() === prefix.toLowerCase()
-			) {
-				return { from, to: cursor };
-			}
-		}
+		// Try different matching strategies in priority order
+		const prefixMatch = this.tryPrefixMatch(snippet, editor, cursor);
+		if (prefixMatch) return prefixMatch;
 
-		const overlapLength = this.findPrefixOverlapLength(snippet, editor);
-			if (overlapLength > 0) {
-				return {
-					from: { line: cursor.line, ch: cursor.ch - overlapLength },
-					to: cursor,
-				};
-			}
+		const overlapMatch = this.tryPrefixOverlapMatch(snippet, editor, cursor);
+		if (overlapMatch) return overlapMatch;
 
-			const matchField = this.getMatchField(snippet);
-			if (matchField) {
-				const candidateLength = matchField.length;
-				if (candidateLength > 0) {
-					const fromCh = Math.max(0, cursor.ch - candidateLength);
-					return {
-						from: { line: cursor.line, ch: fromCh },
-						to: cursor,
-					};
-				}
-			}
+		const matchFieldMatch = this.tryMatchFieldMatch(snippet, cursor);
+		if (matchFieldMatch) return matchFieldMatch;
 
-			const anchorRange = this.getAnchorRange(editor);
-			if (anchorRange) {
-				return anchorRange;
-			}
+		const anchorRange = this.getAnchorRange(editor);
+		if (anchorRange) return anchorRange;
 
-		const fallbackContext = this.getQueryContext(
-			editor,
-			this.currentQuery
-		);
+		// Fallback to query context
+		const fallbackContext = this.getQueryContext(editor, this.currentQuery);
 		this.queryAnchorPos = fallbackContext.range.from;
 		return fallbackContext.range;
 	}
@@ -831,63 +871,128 @@ export class SnippetCompletionMenu {
 	}
 
 	private updateEntriesForQuery(query: string): boolean {
-			const visibleSnippets = this.getVisibleSnippets();
-			const totalSnippetCount = this.options.getSnippets().length;
-			const hiddenCount = Math.max(totalSnippetCount - visibleSnippets.length, 0);
-			const searchStart = getMonotonicTime();
-			const filterResult = this.filterSnippets(query, visibleSnippets);
-			const filtered = filterResult.snippets;
-			this.snippetMatchFields = filterResult.matchFields;
-			const searchDuration = getMonotonicTime() - searchStart;
-			const algorithms = this.options.getRankingAlgorithms();
-			const rankingContextQuery =
-				filterResult.bestCandidate ?? query ?? "";
-			const rankingContext = this.buildRankingContext(rankingContextQuery);
+		const visibleSnippets = this.getVisibleSnippets();
+		const totalSnippetCount = this.options.getSnippets().length;
+		const hiddenCount = Math.max(totalSnippetCount - visibleSnippets.length, 0);
+		
+		const filterResult = this.performFiltering(query, visibleSnippets);
+		const algorithms = this.options.getRankingAlgorithms();
+		const rankingContext = this.buildRankingContext(
+			filterResult.bestCandidate ?? query ?? ""
+		);
 
-			if (filtered.length > 0) {
-				const rankingStart = getMonotonicTime();
-				this.entries = rankSnippets(filtered, algorithms, rankingContext);
-			const rankingDuration = getMonotonicTime() - rankingStart;
+		if (filterResult.filtered.length > 0) {
+			return this.handleFilteredResults(
+				filterResult,
+				query,
+				visibleSnippets,
+				hiddenCount,
+				algorithms,
+				rankingContext
+			);
+		}
+
+		return this.handleNoFilteredResults(
+			query,
+			visibleSnippets,
+			hiddenCount,
+			filterResult.searchDuration,
+			algorithms,
+			rankingContext
+		);
+	}
+
+	private performFiltering(
+		query: string,
+		visibleSnippets: ParsedSnippet[]
+	): {
+		filtered: ParsedSnippet[];
+		matchFields: Map<ParsedSnippet, string>;
+		bestCandidate: string | undefined;
+		searchDuration: number;
+	} {
+		const searchStart = getMonotonicTime();
+		const filterResult = this.filterSnippets(query, visibleSnippets);
+		const searchDuration = getMonotonicTime() - searchStart;
+		
+		this.snippetMatchFields = filterResult.matchFields;
+		
+		return {
+			filtered: filterResult.snippets,
+			matchFields: filterResult.matchFields,
+			bestCandidate: filterResult.bestCandidate,
+			searchDuration,
+		};
+	}
+
+	private handleFilteredResults(
+		filterResult: {
+			filtered: ParsedSnippet[];
+			searchDuration: number;
+		},
+		query: string,
+		visibleSnippets: ParsedSnippet[],
+		hiddenCount: number,
+		algorithms: RankingAlgorithmSetting[],
+		rankingContext: { query: string; usage?: Map<string, number> }
+	): boolean {
+		const rankingStart = getMonotonicTime();
+		this.entries = rankSnippets(filterResult.filtered, algorithms, rankingContext);
+		const rankingDuration = getMonotonicTime() - rankingStart;
+		
+		this.emptyStateMessage = null;
+		
+		this.logQueryTelemetry({
+			query,
+			fallback: false,
+			entriesCount: this.entries.length,
+			filteredCount: filterResult.filtered.length,
+			visibleCount: visibleSnippets.length,
+			hiddenCount,
+			searchDuration: filterResult.searchDuration,
+			rankingDuration,
+			algorithms,
+		});
+		
+		return true;
+	}
+
+	private handleNoFilteredResults(
+		query: string,
+		visibleSnippets: ParsedSnippet[],
+		hiddenCount: number,
+		searchDuration: number,
+		algorithms: RankingAlgorithmSetting[],
+		rankingContext: { query: string; usage?: Map<string, number> }
+	): boolean {
+		if (visibleSnippets.length === 0) {
+			this.snippetMatchFields = new Map();
+			this.entries = [];
 			this.emptyStateMessage = null;
-			this.logQueryTelemetry({
-				query,
-				fallback: false,
-				entriesCount: this.entries.length,
-				filteredCount: filtered.length,
-				visibleCount: visibleSnippets.length,
-				hiddenCount,
-				searchDuration,
-				rankingDuration,
-				algorithms,
-			});
-				return true;
-			}
+			return false;
+		}
 
-			if (visibleSnippets.length === 0) {
-				this.snippetMatchFields = new Map();
-				this.entries = [];
-				this.emptyStateMessage = null;
-				return false;
-			}
-
-			const rankingStart = getMonotonicTime();
-			this.entries = rankSnippets(visibleSnippets, algorithms, rankingContext);
-			const rankingDuration = getMonotonicTime() - rankingStart;
+		const rankingStart = getMonotonicTime();
+		this.entries = rankSnippets(visibleSnippets, algorithms, rankingContext);
+		const rankingDuration = getMonotonicTime() - rankingStart;
+		
 		const displayQuery = query ?? "";
-			this.emptyStateMessage = displayQuery
-				? `No snippets match "${displayQuery}". Showing all snippets.`
-				: null;
-			this.logQueryTelemetry({
-				query,
-				fallback: true,
-				entriesCount: this.entries.length,
-				filteredCount: 0,
-				visibleCount: visibleSnippets.length,
-				hiddenCount,
-				searchDuration,
-				rankingDuration,
-				algorithms,
-			});
+		this.emptyStateMessage = displayQuery
+			? `No snippets match "${displayQuery}". Showing all snippets.`
+			: null;
+		
+		this.logQueryTelemetry({
+			query,
+			fallback: true,
+			entriesCount: this.entries.length,
+			filteredCount: 0,
+			visibleCount: visibleSnippets.length,
+			hiddenCount,
+			searchDuration,
+			rankingDuration,
+			algorithms,
+		});
+		
 		return true;
 	}
 

@@ -58,6 +58,19 @@ export const setRealtimeSyncCallback = (callback: RealtimeSyncCallback | null): 
 
 export const getRealtimeSyncCallback = (): RealtimeSyncCallback | null => realtimeSyncCallback;
 
+// Debounce state for realtime sync
+interface PendingSync {
+	timeoutId: number;
+	view: EditorView;
+	session: SnippetSessionEntry;
+	currentStop: SnippetSessionStop;
+	syncId: number;
+}
+
+let pendingSync: PendingSync | null = null;
+let syncIdCounter = 0;
+const DEBOUNCE_DELAY_MS = 50; // Debounce rapid changes
+
 const mapStops = (stops: SnippetSessionStop[], change: ChangeDesc): SnippetSessionStop[] =>
 	stops.map(stop => ({
 		...stop,
@@ -286,6 +299,276 @@ const buildDecorations = (state: EditorState): DecorationSet => {
 	return builder.finish();
 };
 
+/**
+ * Check if session was changed by an effect (push/pop/replace/clear)
+ */
+function isSessionChangedByEffect(update: ViewUpdate): boolean {
+	return update.transactions.some(tr =>
+		tr.effects.some(effect =>
+			effect.is(pushSnippetSessionEffect) ||
+			effect.is(popSnippetSessionEffect) ||
+			effect.is(replaceSnippetSessionEffect) ||
+			effect.is(clearSnippetSessionsEffect)
+		)
+	);
+}
+
+/**
+ * Check if this update was triggered by a snippet sync operation
+ */
+function isSnippetSyncTransaction(update: ViewUpdate): boolean {
+	return update.transactions.some(tr => 
+		tr.annotation(Transaction.userEvent) === 'snippet-sync'
+	);
+}
+
+/**
+ * Find the current reference stop that matches the selection
+ */
+function findCurrentReferenceStop(
+	session: SnippetSessionEntry,
+	selection: { from: number; to: number }
+): SnippetSessionStop | null {
+	return session.stops.find((stop) =>
+		isReferenceStop(stop) &&
+		stop.index === session.currentIndex &&
+		selection.from >= stop.start &&
+		selection.from <= stop.end
+	) ?? null;
+}
+
+/**
+ * Check if changes overlap with the current stop
+ * Simplified to check selection position since we know the document changed
+ */
+function hasChangesInStop(
+	_changes: ChangeDesc,
+	currentStop: SnippetSessionStop,
+	selection: { from: number; to: number }
+): boolean {
+	// Check if selection/cursor is within the stop range
+	// This is sufficient since we already know the document changed
+	const selectionInStop =
+		selection.from >= currentStop.start && selection.from <= currentStop.end;
+
+	// Also check if selection extends into or through the stop
+	const selectionOverlapsStop =
+		selection.to > currentStop.start && selection.from <= currentStop.end;
+
+	return selectionInStop || selectionOverlapsStop;
+}
+
+/**
+ * Check if realtime sync should be triggered for this update
+ */
+function shouldTriggerRealtimeSync(
+	update: ViewUpdate,
+	session: SnippetSessionEntry
+): { shouldSync: boolean; currentStop: SnippetSessionStop | null; reason?: string } {
+	// Early return checks
+	if (!update.docChanged) {
+		return { shouldSync: false, currentStop: null, reason: 'no document change' };
+	}
+
+	if (!realtimeSyncCallback) {
+		return { shouldSync: false, currentStop: null, reason: 'no callback registered' };
+	}
+
+	if (isSessionChangedByEffect(update)) {
+		return { shouldSync: false, currentStop: null, reason: 'session changed by effect' };
+	}
+
+	if (isSnippetSyncTransaction(update)) {
+		logRealtimeDebug('Skip realtime sync (snippet-sync transaction)');
+		return { shouldSync: false, currentStop: null, reason: 'snippet-sync transaction' };
+	}
+
+	if (session.currentIndex < 0) {
+		logRealtimeDebug('Skip realtime sync (invalid currentIndex)', session.currentIndex);
+		return { shouldSync: false, currentStop: null, reason: 'invalid currentIndex' };
+	}
+
+	const selection = update.state.selection.main;
+	const currentStop = findCurrentReferenceStop(session, selection);
+
+	if (!currentStop) {
+		logRealtimeDebug('Skip realtime sync (no reference stop matching selection)', {
+			currentIndex: session.currentIndex,
+			selection: { from: selection.from, to: selection.to },
+		});
+		return { shouldSync: false, currentStop: null, reason: 'no matching reference stop' };
+	}
+
+	// Check if changes are within the current stop
+	const changeInStop = hasChangesInStop(update.changes, currentStop, selection);
+
+	if (!changeInStop) {
+		logRealtimeDebug('Skip realtime sync (no overlap with current reference stop)', {
+			currentIndex: currentStop.index,
+			selection: { from: selection.from, to: selection.to },
+			stopRange: { start: currentStop.start, end: currentStop.end },
+			changeDesc: update.changes.toString(),
+		});
+		return { shouldSync: false, currentStop, reason: 'no overlap with stop' };
+	}
+
+	return { shouldSync: true, currentStop };
+}
+
+/**
+ * Validate that the session and stop are still valid before syncing
+ */
+function validateSyncState(
+	view: EditorView,
+	session: SnippetSessionEntry,
+	currentStop: SnippetSessionStop
+): boolean {
+	// Check if callback is still registered
+	if (!realtimeSyncCallback) {
+		logRealtimeDebug('Skip sync: callback not registered');
+		return false;
+	}
+
+	// Get current session state from view
+	const currentStack = view.state.field(snippetSessionField);
+	if (!currentStack || currentStack.length === 0) {
+		logRealtimeDebug('Skip sync: no active session');
+		return false;
+	}
+
+	const latestSession = currentStack[currentStack.length - 1];
+	
+	// Check if session is still the same (same stops array reference or same structure)
+	// We compare by checking if the current index and stop structure match
+	if (
+		latestSession.currentIndex !== session.currentIndex ||
+		latestSession.stops.length !== session.stops.length
+	) {
+		logRealtimeDebug('Skip sync: session changed', {
+			oldIndex: session.currentIndex,
+			newIndex: latestSession.currentIndex,
+			oldStops: session.stops.length,
+			newStops: latestSession.stops.length,
+		});
+		return false;
+	}
+
+	// Verify the current stop still exists and matches
+	const matchingStop = latestSession.stops.find(
+		(stop) =>
+			stop.index === currentStop.index &&
+			isReferenceStop(stop) &&
+			stop.referenceGroup === currentStop.referenceGroup
+	);
+
+	if (!matchingStop) {
+		logRealtimeDebug('Skip sync: current stop no longer exists', {
+			index: currentStop.index,
+			referenceGroup: currentStop.referenceGroup,
+		});
+		return false;
+	}
+
+	// Check if selection is still within the stop range
+	const selection = view.state.selection.main;
+	if (
+		selection.from < matchingStop.start ||
+		selection.from > matchingStop.end
+	) {
+		logRealtimeDebug('Skip sync: selection moved outside stop', {
+			selectionFrom: selection.from,
+			stopRange: { start: matchingStop.start, end: matchingStop.end },
+		});
+		return false;
+	}
+
+	return true;
+}
+
+/**
+ * Execute realtime sync callback with debouncing and validation
+ */
+function executeRealtimeSync(
+	view: EditorView,
+	session: SnippetSessionEntry,
+	currentStop: SnippetSessionStop
+): void {
+	if (!realtimeSyncCallback) return;
+
+	// Cancel any pending sync for this view
+	if (pendingSync && pendingSync.view === view) {
+		clearTimeout(pendingSync.timeoutId);
+		logRealtimeDebug('Cancelled pending sync', { syncId: pendingSync.syncId });
+	}
+
+	// Create new sync operation
+	const syncId = ++syncIdCounter;
+	const capturedSession = { ...session, stops: session.stops.map(s => ({ ...s })) };
+	const capturedStop = { ...currentStop };
+
+	logRealtimeDebug('Schedule realtime sync', {
+		syncId,
+		currentIndex: currentStop.index,
+		selection: view.state.selection.main,
+		stopRange: { start: currentStop.start, end: currentStop.end },
+	});
+
+	// Debounce rapid changes
+	const timeoutId = window.setTimeout(() => {
+		// Clear pending sync
+		if (pendingSync?.syncId === syncId) {
+			pendingSync = null;
+		}
+
+		// Validate state before executing
+		if (!validateSyncState(view, capturedSession, capturedStop)) {
+			logRealtimeDebug('Sync cancelled: validation failed', { syncId });
+			return;
+		}
+
+		// Get latest session state for callback
+		const currentStack = view.state.field(snippetSessionField);
+		if (!currentStack || currentStack.length === 0) {
+			logRealtimeDebug('Sync cancelled: no session', { syncId });
+			return;
+		}
+
+		const latestSession = currentStack[currentStack.length - 1];
+		const latestStop = latestSession.stops.find(
+			(stop) =>
+				stop.index === capturedStop.index &&
+				isReferenceStop(stop) &&
+				stop.referenceGroup === capturedStop.referenceGroup
+		);
+
+		if (!latestStop) {
+			logRealtimeDebug('Sync cancelled: stop not found', { syncId });
+			return;
+		}
+
+		// Execute callback with latest state
+		logRealtimeDebug('Execute realtime sync', {
+			syncId,
+			currentIndex: latestStop.index,
+			selection: view.state.selection.main,
+			stopRange: { start: latestStop.start, end: latestStop.end },
+		});
+
+		const callback = realtimeSyncCallback;
+		if (callback) {
+			callback(view, latestSession, latestStop);
+		}
+	}, DEBOUNCE_DELAY_MS);
+
+	pendingSync = {
+		timeoutId,
+		view,
+		session: capturedSession,
+		currentStop: capturedStop,
+		syncId,
+	};
+}
+
 export const snippetSessionPlugin = ViewPlugin.fromClass(
 	class {
 		decorations: DecorationSet;
@@ -302,104 +585,24 @@ export const snippetSessionPlugin = ViewPlugin.fromClass(
 			const docChanged = update.docChanged;
 			const selectionChanged = update.selectionSet;
 			const sessionChanged = update.startState.field(snippetSessionField) !== update.state.field(snippetSessionField);
-			// Detect structural session changes (push/pop/replace/clear) so realtime sync only skips when session stack itself is modified
-			const sessionChangedByEffect = update.transactions.some(tr =>
-				tr.effects.some(effect =>
-					effect.is(pushSnippetSessionEffect) ||
-					effect.is(popSnippetSessionEffect) ||
-					effect.is(replaceSnippetSessionEffect) ||
-					effect.is(clearSnippetSessionsEffect)
-				)
-			);
 
+			// Update decorations if needed
 			if (docChanged || selectionChanged || sessionChanged) {
 				this.decorations = buildDecorations(update.state);
 			}
 
 			// Handle realtime sync for reference stops
-			if (docChanged && realtimeSyncCallback && !sessionChangedByEffect) {
-				// Skip if this change was triggered by snippet sync (avoid infinite loop)
-				const isSnippetSync = update.transactions.some(tr => 
-					tr.annotation(Transaction.userEvent) === 'snippet-sync'
-				);
-				if (isSnippetSync) {
-					logRealtimeDebug('Skip realtime sync (snippet-sync transaction)');
-					return;
-				}
-				
-				// Only sync if session didn't change structurally (to avoid syncing during session push/pop)
+			if (docChanged && realtimeSyncCallback) {
 				const stack = update.state.field(snippetSessionField);
 				if (!stack || stack.length === 0) {
-					logRealtimeDebug('Skip realtime sync (no session stack)');
 					return;
 				}
 
 				const session = stack[stack.length - 1];
-				if (session.currentIndex < 0) {
-					logRealtimeDebug('Skip realtime sync (invalid currentIndex)', session.currentIndex);
-					return;
-				}
+				const syncResult = shouldTriggerRealtimeSync(update, session);
 
-				const selection = update.state.selection.main;
-
-				// Find the reference stop that the cursor is currently inside (for duplicate indices, use range match)
-				const currentStop = session.stops.find((stop) =>
-					isReferenceStop(stop) &&
-					stop.index === session.currentIndex &&
-					selection.from >= stop.start &&
-					selection.from <= stop.end
-				);
-
-				if (!currentStop) {
-					logRealtimeDebug('Skip realtime sync (no reference stop matching selection)', {
-						currentIndex: session.currentIndex,
-						selection: { from: selection.from, to: selection.to },
-					});
-					return;
-				}
-
-				const changes = update.changes;
-				let changeInCurrentStop = false;
-
-				// Check whether any change range overlaps the current stop (using new positions)
-				changes.iterChanges((_fromA, _toA, fromB, toB) => {
-					const overlaps = fromB <= currentStop.end && toB >= currentStop.start;
-					if (overlaps) {
-						changeInCurrentStop = true;
-					}
-				});
-
-				// Also allow trigger when selection is inside the stop even if change range was zero-length at boundary
-				if (!changeInCurrentStop && selection.from >= currentStop.start && selection.from <= currentStop.end) {
-					changeInCurrentStop = true;
-				}
-
-				if (changeInCurrentStop && realtimeSyncCallback) {
-					logRealtimeDebug('Trigger realtime sync', {
-						currentIndex: currentStop.index,
-						selection: { from: selection.from, to: selection.to },
-						stopRange: { start: currentStop.start, end: currentStop.end },
-						changeDesc: changes.toString(),
-					});
-					// Dispatching view updates during a ViewPlugin.update causes nested update errors.
-					// Defer the sync to the next task so CodeMirror completes the current update cycle first.
-					const callback = realtimeSyncCallback;
-					setTimeout(() => {
-						if (!callback) return;
-						logRealtimeDebug('Execute deferred realtime sync', {
-							currentIndex: currentStop.index,
-							selection: { from: selection.from, to: selection.to },
-							stopRange: { start: currentStop.start, end: currentStop.end },
-						});
-						callback(update.view, session, currentStop);
-					}, 0);
-				} else {
-					logRealtimeDebug('Skip realtime sync (no overlap with current reference stop)', {
-						currentIndex: currentStop.index,
-						selection: { from: selection.from, to: selection.to },
-						stopRange: { start: currentStop.start, end: currentStop.end },
-						changeDesc: changes.toString(),
-					});
+				if (syncResult.shouldSync && syncResult.currentStop) {
+					executeRealtimeSync(update.view, session, syncResult.currentStop);
 				}
 			}
 

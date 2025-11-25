@@ -397,3 +397,207 @@ describe('Widget configuration', () => {
 		expect(config.enabled).toBe(false);
 	});
 });
+
+describe('Edge cases and boundary conditions', () => {
+	it('handles stops with overlapping positions', () => {
+		const view = new MockEditorView('test');
+		view.dispatch({
+			effects: pushSnippetSessionEffect.of({
+				currentIndex: 1,
+				stops: [
+					{ index: 1, start: 0, end: 2 },
+					{ index: 2, start: 1, end: 3 }, // Overlaps with stop 1
+				],
+			}),
+		});
+
+		const stack = getSnippetSessionStack(view as any);
+		expect(stack).toBeDefined();
+		expect(stack?.length).toBe(1);
+		expect(stack?.[0].stops.length).toBe(2);
+	});
+
+	it('handles empty reference groups', () => {
+		const view = new MockEditorView('test');
+		view.dispatch({
+			effects: pushSnippetSessionEffect.of({
+				currentIndex: 1,
+				stops: [
+					{ 
+						index: 1, 
+						start: 0, 
+						end: 0,
+						type: 'reference',
+						referenceGroup: '',
+						linkedStops: [],
+					},
+				],
+			}),
+		});
+
+		const stack = getSnippetSessionStack(view as any);
+		expect(stack?.[0].stops[0].referenceGroup).toBe('');
+		expect(stack?.[0].stops[0].linkedStops).toEqual([]);
+	});
+
+	it('handles invalid stop positions (negative)', () => {
+		const view = new MockEditorView('test');
+		view.dispatch({
+			effects: pushSnippetSessionEffect.of({
+				currentIndex: 1,
+				stops: [
+					{ index: 1, start: -1, end: 0 }, // Invalid start position
+				],
+			}),
+		});
+
+		const stack = getSnippetSessionStack(view as any);
+		expect(stack?.[0].stops[0].start).toBe(-1); // State field accepts it, but should be handled by validation
+	});
+
+	it('handles stops with end before start', () => {
+		const view = new MockEditorView('test');
+		view.dispatch({
+			effects: pushSnippetSessionEffect.of({
+				currentIndex: 1,
+				stops: [
+					{ index: 1, start: 5, end: 2 }, // end < start
+				],
+			}),
+		});
+
+		const stack = getSnippetSessionStack(view as any);
+		expect(stack?.[0].stops[0].start).toBe(5);
+		expect(stack?.[0].stops[0].end).toBe(2);
+	});
+
+	it('handles very large stop positions', () => {
+		const view = new MockEditorView('test');
+		const largePos = 1000000;
+		view.dispatch({
+			effects: pushSnippetSessionEffect.of({
+				currentIndex: 1,
+				stops: [
+					{ index: 1, start: largePos, end: largePos + 10 },
+				],
+			}),
+		});
+
+		const stack = getSnippetSessionStack(view as any);
+		expect(stack?.[0].stops[0].start).toBe(largePos);
+		expect(stack?.[0].stops[0].end).toBe(largePos + 10);
+	});
+
+	it('handles session with zero stops', () => {
+		const view = new MockEditorView('test');
+		view.dispatch({
+			effects: pushSnippetSessionEffect.of({
+				currentIndex: 0,
+				stops: [],
+			}),
+		});
+
+		const stack = getSnippetSessionStack(view as any);
+		expect(stack?.[0].stops.length).toBe(0);
+		expect(stack?.[0].currentIndex).toBe(0);
+	});
+
+	it('handles currentIndex out of bounds', () => {
+		const view = new MockEditorView('test');
+		view.dispatch({
+			effects: pushSnippetSessionEffect.of({
+				currentIndex: 999, // Out of bounds
+				stops: [
+					{ index: 1, start: 0, end: 0 },
+				],
+			}),
+		});
+
+		const stack = getSnippetSessionStack(view as any);
+		expect(stack?.[0].currentIndex).toBe(999);
+		expect(stack?.[0].stops.length).toBe(1);
+	});
+
+	it('handles rapid session updates', () => {
+		const view = new MockEditorView('test');
+		
+		// Push multiple sessions rapidly
+		for (let i = 0; i < 10; i++) {
+			view.dispatch({
+				effects: pushSnippetSessionEffect.of({
+					currentIndex: i,
+					stops: [{ index: i, start: i, end: i }],
+				}),
+			});
+		}
+
+		const stack = getSnippetSessionStack(view as any);
+		expect(stack?.length).toBe(10);
+		expect(stack?.[9].currentIndex).toBe(9);
+	});
+
+	it('handles document changes that move stops beyond document length', () => {
+		const view = new MockEditorView('abc');
+		view.dispatch({
+			effects: pushSnippetSessionEffect.of({
+				currentIndex: 1,
+				stops: [{ index: 1, start: 0, end: 3 }],
+			}),
+		});
+
+		// Delete all text, making stop positions invalid
+		view.dispatch({
+			changes: { from: 0, to: 3, insert: '' },
+		});
+
+		const stack = getSnippetSessionStack(view as any);
+		// Positions should be mapped by CodeMirror
+		expect(stack?.[0].stops[0].start).toBe(0);
+		expect(stack?.[0].stops[0].end).toBe(0);
+	});
+
+	it('handles reference stops with missing linkedStops', () => {
+		const view = new MockEditorView('test');
+		view.dispatch({
+			effects: pushSnippetSessionEffect.of({
+				currentIndex: 1,
+				stops: [
+					{ 
+						index: 1, 
+						start: 0, 
+						end: 0,
+						type: 'reference',
+						referenceGroup: 'ref_0',
+						// linkedStops is undefined
+					},
+				],
+			}),
+		});
+
+		const stack = getSnippetSessionStack(view as any);
+		expect(stack?.[0].stops[0].type).toBe('reference');
+		expect(stack?.[0].stops[0].linkedStops).toBeUndefined();
+	});
+
+	it('handles reference stops with invalid linkedStops indices', () => {
+		const view = new MockEditorView('test');
+		view.dispatch({
+			effects: pushSnippetSessionEffect.of({
+				currentIndex: 1,
+				stops: [
+					{ 
+						index: 1, 
+						start: 0, 
+						end: 0,
+						type: 'reference',
+						referenceGroup: 'ref_0',
+						linkedStops: [999, -1], // Invalid indices
+					},
+				],
+			}),
+		});
+
+		const stack = getSnippetSessionStack(view as any);
+		expect(stack?.[0].stops[0].linkedStops).toEqual([999, -1]);
+	});
+});

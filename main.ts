@@ -6,6 +6,7 @@ import type {
 	ParsedSnippet,
 	SnippetMenuKeymap,
 	PluginSettings,
+	RawPluginSettings,
 	RankingAlgorithmId,
 	RankingAlgorithmSetting,
 	VirtualTextColorPreset,
@@ -117,20 +118,24 @@ export default class TextSnippetsPlugin extends Plugin {
 
 	async loadSettings() {
 		const raw = await this.loadData();
-		this.settings = ensurePluginSettings(raw ?? {});
-		const legacyPath = (this.settings as any).snippetsFilePath;
-		if (!Array.isArray(this.settings.snippetFiles)) {
-			this.settings.snippetFiles = [];
-		}
+		const rawSettings: RawPluginSettings = raw ?? {};
+		
+		// Migrate legacy snippetsFilePath to snippetFiles array
+		const legacyPath = rawSettings.snippetsFilePath;
 		if (
 			legacyPath &&
 			typeof legacyPath === "string" &&
 			legacyPath.length > 0 &&
-			this.settings.snippetFiles.length === 0
+			(!Array.isArray(rawSettings.snippetFiles) || rawSettings.snippetFiles.length === 0)
 		) {
-			this.settings.snippetFiles = [legacyPath];
+			rawSettings.snippetFiles = [legacyPath];
 		}
-		delete (this.settings as any).snippetsFilePath;
+		
+		// Remove legacy property before normalization
+		delete rawSettings.snippetsFilePath;
+		
+		this.settings = ensurePluginSettings(rawSettings);
+		
 		if (!Array.isArray(this.settings.debugCategories)) {
 			this.settings.debugCategories = [];
 		}

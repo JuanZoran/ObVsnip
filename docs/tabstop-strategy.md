@@ -7,20 +7,6 @@
 > - ⏳ **阶段 3**（函数 Snippet 支持）：未实现
 
 ## 当前实现分析
-
-### 现有跳转机制（已重构）
-
-> **注意**：以下描述的是重构前的实现，当前已采用策略模式重构。
-
-- **原位置**: `src/snippetManager.ts` 中的 `selectNextTabStop()` 和 `selectPrevTabStop()`
-- **原逻辑**: 基于 `session.currentIndex` 的简单数值递增/递减查找
-- **原限制**: 
-  - 使用 `Map<number, TabStopInfo>` 存储,同一 index 只能有一个 stop
-  - `find()` 方法只返回第一个匹配项
-  - 不支持同一 `$1` 在多个位置出现
-
-**当前状态**：已通过策略模式重构，支持引用类型 stop 的多位置同步。
-
 ### 功能需求状态
 
 1. **引用 Snippet** (`$1` 多处使用) ✅ **已实现**
@@ -48,12 +34,6 @@
 - **组合使用**: 一个 stop 可以同时使用跳转策略和占位符策略
   - 例如: Choice tabstop 使用 `StandardJumpStrategy`（标准跳转）+ `ChoicePlaceholderStrategy`（choice 行为）
 
-**为什么按 stop 级别而非 snippet 级别?**
-
-- 同一个 snippet 中可能混合不同类型的 tab stop
-- 例如: `$1` 是引用类型,`$2` 是函数类型,`$3` 是标准类型
-- 每个 stop 需要独立选择策略,而不是整个 snippet 统一策略
-
 ### 优势
 
 ✅ **扩展性强**: 新增 stop 类型只需添加新策略,无需修改核心逻辑
@@ -69,7 +49,6 @@
 ### 需要重构的部分
 
 1. **数据结构**: `TabStopInfo` 和 `SnippetSessionStop` 需要支持:
-
    - 同一 index 的多个位置(引用 snippet)
    - 函数元数据(函数 snippet)
    - stop 类型标识
@@ -83,8 +62,6 @@
 6. **设置选项**: 在 `SettingsTab` 中添加控制选项
 
 ## 推荐设计方案：双策略模式
-
-经过评估，我们采用**双策略模式**，分别处理跳转逻辑和占位符行为：
 
 ### 1. 跳转策略接口设计（Jump Strategy）
 

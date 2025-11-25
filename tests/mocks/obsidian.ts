@@ -99,3 +99,25 @@ export class Editor {
 		return { line: 0, ch: 0 };
 	}
 }
+
+export class Plugin {
+	app: any;
+	manifest: any;
+	constructor(app: any, manifest: any) {
+		this.app = app;
+		this.manifest = manifest;
+	}
+	onload() {}
+	onunload() {}
+	loadData() {
+		return Promise.resolve({});
+	}
+	saveData() {
+		return Promise.resolve();
+	}
+	addSettingTab() {}
+	registerCommands() {}
+	registerEditorExtension() {}
+	registerEvent() {}
+	register() {}
+}

@@ -98,6 +98,17 @@ export interface PluginSettings {
 	referenceSyncMode: 'realtime' | 'on-jump';  // 同步模式
 }
 
+/**
+ * Raw plugin settings as loaded from storage, may include legacy properties
+ */
+export interface RawPluginSettings extends Partial<PluginSettings> {
+	/**
+	 * Legacy property: single snippet file path (migrated to snippetFiles array)
+	 * @deprecated Use snippetFiles instead
+	 */
+	snippetsFilePath?: string;
+}
+
 export interface VirtualTextColorPreset {
 	name?: string;
 	placeholderColor: string;
