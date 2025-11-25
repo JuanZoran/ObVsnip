@@ -61,33 +61,93 @@ jobs:
           echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
           echo "Tag name: $TAG_NAME"
       
-      - name: Verify GitHub CLI
-        run: |
-          gh --version
-          echo "GitHub CLI is available"
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const tagName = '${{ steps.tag.outputs.tag }}';
+            const version = '${{ steps.package-version.outputs.version }}';
+            const releaseNotes = `Release ${version}
+            
+            ## Installation
+            1. Download the zip file or individual files
+            2. Extract to your Obsidian vault's \`.obsidian/plugins/obvsnip/\` directory
+            3. Restart Obsidian`;
+            
+            // Check if release already exists
+            try {
+              const existingRelease = await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag: tagName
+              });
+              console.log('Release already exists, deleting...');
+              await github.rest.repos.deleteRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: existingRelease.data.id
+              });
+            } catch (error) {
+              if (error.status !== 404) {
+                throw error;
+              }
+              console.log('Release does not exist, will create new one');
+            }
+            
+            // Create new release
+            const release = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tagName,
+              name: `Release ${version}`,
+              body: releaseNotes,
+              draft: false,
+              prerelease: false
+            });
+            
+            console.log(`Release created: ${release.data.upload_url}`);
+            core.setOutput('upload_url', release.data.upload_url);
+            core.setOutput('release_id', release.data.id);
       
-      - name: Create GitHub Release with assets
-        run: |
-          # Check if release already exists
-          if gh release view ${{ steps.tag.outputs.tag }} >/dev/null 2>&1; then
-            echo "Release already exists, updating..."
-            # Delete existing release to recreate with new assets
-            gh release delete ${{ steps.tag.outputs.tag }} --yes
-          fi
-          
-          # Create new release with assets
-          gh release create ${{ steps.tag.outputs.tag }} \
-            --title "Release ${{ steps.package-version.outputs.version }}" \
-            --notes "Release ${{ steps.package-version.outputs.version }}
-          
-          ## Installation
-          1. Download the zip file or individual files
-          2. Extract to your Obsidian vault's \`.obsidian/plugins/obvsnip/\` directory
-          3. Restart Obsidian" \
-            obvsnip-${{ steps.package-version.outputs.version }}.zip \
-            build/manifest.json \
-            build/main.js \
-            build/styles.css
+      - name: Upload zip file
+        uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./obvsnip-${{ steps.package-version.outputs.version }}.zip
+          asset_name: obvsnip-${{ steps.package-version.outputs.version }}.zip
+          asset_content_type: application/zip
+      
+      - name: Upload manifest.json
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./build/manifest.json
+          asset_name: manifest.json
+          asset_content_type: application/json
+      
+      - name: Upload main.js
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./build/main.js
+          asset_name: main.js
+          asset_content_type: application/javascript
+      
+      - name: Upload styles.css
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./build/styles.css
+          asset_name: styles.css
+          asset_content_type: text/css
 
