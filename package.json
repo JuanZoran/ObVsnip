@@ -6,9 +6,7 @@
 	"scripts": {
 		"dev": "npm-run-all --parallel dev:build dev:sync",
 		"dev:build": "node esbuild.config.mjs",
-		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production && npm run copy",
-		"copy": "mkdir -p build && cp main.js manifest.json styles.css build 2>/dev/null || cp main.js manifest.json build",
-		"dev:sync": "chokidar \"main.js\" -c \"npm run copy\"",
+		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
 		"test": "jest",
 		"version": "node version-bump.mjs && git add manifest.json versions.json"
 	},

@@ -12,8 +12,8 @@ import { SnippetManager } from "./snippetManager";
 
 import { PluginLogger } from "./logger";
 
-import { getActiveEditor, getEditorView } from "./editorUtils";
-import { getContextBeforeCursor } from "./prefixContext";
+import { getActiveEditor, getEditorView } from "./utils/editorUtils";
+import { getContextBeforeCursor } from "./utils/prefixContext";
 import { getMonotonicTime } from "./telemetry";
 import { getSnippetWidgetConfig } from "./snippetSession";
 

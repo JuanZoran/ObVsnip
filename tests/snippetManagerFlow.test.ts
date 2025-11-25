@@ -5,12 +5,12 @@ import { PluginLogger } from '../src/logger';
 import { processSnippetBody } from '../src/snippetBody';
 import { MockEditor, MockEditorView } from './mocks/editor';
 
-jest.mock('../src/editorUtils', () => ({
+jest.mock('../src/utils/editorUtils', () => ({
 	getActiveEditor: jest.fn(),
 	getEditorView: jest.fn(),
 }));
 
-import { getActiveEditor, getEditorView } from '../src/editorUtils';
+import { getActiveEditor, getEditorView } from '../src/utils/editorUtils';
 
 describe('SnippetManager core flow', () => {
 	const setupSnippet = () => {

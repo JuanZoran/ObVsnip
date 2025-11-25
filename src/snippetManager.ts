@@ -15,26 +15,34 @@ import {
     SnippetSessionEntry,
     getSnippetSessionStack,
 } from './snippetSession';
-import { getActiveEditor, getEditorView } from "./editorUtils";
+import { getActiveEditor, getEditorView } from "./utils/editorUtils";
 import { resolveVariableValue } from "./variableResolver";
-import { getContextBeforeCursor } from "./prefixContext";
-
-type JumpCandidate = {
-    index: number;
-    stop: SnippetSessionStop;
-};
+import { getContextBeforeCursor } from "./utils/prefixContext";
+import {
+    JumpCandidate,
+    TabStopJumpStrategySelector,
+} from "./strategies/tabStopJumpStrategy";
+import {
+    TabStopPlaceholderStrategySelector,
+} from "./strategies/tabStopPlaceholderStrategy";
 
 type SnippetManagerOptions = {
     onSnippetApplied?: (snippet: ParsedSnippet) => void;
 };
 
 export class SnippetManager {
+	private jumpStrategySelector: TabStopJumpStrategySelector;
+	private placeholderStrategySelector: TabStopPlaceholderStrategySelector;
+
 	constructor(
 		private app: App,
 		private snippetEngine: SnippetEngine,
 		private logger: PluginLogger,
 		private options?: SnippetManagerOptions
-	) {}
+	) {
+		this.jumpStrategySelector = new TabStopJumpStrategySelector();
+		this.placeholderStrategySelector = new TabStopPlaceholderStrategySelector();
+	}
 
     expandSnippet(): boolean {
         const editor = getActiveEditor(this.app);
@@ -248,9 +256,14 @@ export class SnippetManager {
             index: firstTabStop.index,
             start: baseOffset + firstTabStop.start,
             end: baseOffset + firstTabStop.end,
+            choices: firstTabStop.choices,
         };
         this.focusStopByOffset(editor, firstStopAbsolute);
         this.pushSnippetSession(editor, baseOffset, tabStops, firstTabStop.index);
+        
+        // Call placeholder strategy initialization
+        const placeholderStrategy = this.placeholderStrategySelector.getStrategy(firstStopAbsolute);
+        placeholderStrategy.onStopInitialized?.(editor, firstStopAbsolute);
 
         this.logger.debug("manager", `✨ Expanded snippet: ${snippet.prefix} | Entered snippet mode`);
         this.notifySnippetApplied(snippet);
@@ -313,29 +326,33 @@ export class SnippetManager {
         if (!session) return false;
 
         const stop = session.stops.find((s: SnippetSessionStop) => s.index === session.currentIndex);
-        if (!stop || !stop.choices || stop.choices.length === 0) {
+        if (!stop) {
             return false;
         }
 
+        const strategy = this.placeholderStrategySelector.getStrategy(stop);
+        const actions = strategy.getSpecialActions?.(stop);
+        
+        if (!actions || !actions.includes('cycleChoice')) {
+            return false;
+        }
+
+        // Get current text before cycling
         const from = editor.offsetToPos(stop.start);
         const to = editor.offsetToPos(stop.end);
-        const currentText = editor.getRange(from, to);
-        const len = stop.choices.length;
-        const currentIndex = stop.choices.findIndex(choice => choice === currentText);
-        const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % len : 0;
-        const nextValue = stop.choices[nextIndex] ?? '';
+        const oldText = editor.getRange(from, to);
 
-        editor.replaceRange(nextValue, from, to);
+        const result = strategy.executeSpecialAction?.(editor, stop, 'cycleChoice');
+        
+        if (result) {
+            // Get new text after cycling
+            const newFrom = editor.offsetToPos(stop.start);
+            const newTo = editor.offsetToPos(stop.end);
+            const newText = editor.getRange(newFrom, newTo);
+            this.logger.debug("manager", `🔁 Cycled choice at tab stop $${stop.index}: "${oldText}" -> "${newText}"`);
+        }
 
-        const startOffset = editor.posToOffset(from);
-        const newEndOffset = startOffset + nextValue.length;
-        const newEndPos = editor.offsetToPos(newEndOffset);
-
-        editor.setSelection(from, newEndPos);
-
-        this.logger.debug("manager", `🔁 Cycled choice at tab stop $${stop.index}: "${nextValue}"`);
-
-        return true;
+        return result ?? false;
     }
 
     private applyVariablesToText(
@@ -445,47 +462,45 @@ export class SnippetManager {
     private getNextTabStopCandidate(
         session: SnippetSessionEntry,
         currentIndex: number
-    ): { index: number; stop: SnippetSessionStop } | null {
-        let nextIndex = currentIndex + 1;
-        let nextStop = session.stops.find((t) => t.index === nextIndex);
-        if (!nextStop && currentIndex !== 0) {
-            nextIndex = 0;
-            nextStop = session.stops.find((t) => t.index === 0);
-        }
-        if (!nextStop) {
+    ): JumpCandidate | null {
+        // Use jump strategy to get the next candidate (reuse strategy logic)
+        const currentStop = session.stops.find((s) => s.index === currentIndex);
+        if (!currentStop) {
             return null;
         }
-        return { index: nextIndex, stop: nextStop };
+        const strategy = this.jumpStrategySelector.getStrategy(currentStop);
+        return strategy.selectNext(session, currentIndex);
     }
 
     private selectNextTabStop(session: SnippetSessionEntry): JumpCandidate | null {
-        let nextTabIndex = session.currentIndex + 1;
-        this.logger.debug("manager", `  Looking for $${nextTabIndex}...`);
+        const currentStop = session.stops.find((s) => s.index === session.currentIndex);
+        if (!currentStop) {
+            return null;
+        }
 
-        let nextTabStop = session.stops.find((t) => t.index === nextTabIndex);
-        if (!nextTabStop && session.currentIndex !== 0) {
+        this.logger.debug("manager", `  Looking for $${session.currentIndex + 1}...`);
+
+        const strategy = this.jumpStrategySelector.getStrategy(currentStop);
+        const candidate = strategy.selectNext(session, session.currentIndex);
+
+        if (!candidate && session.currentIndex !== 0) {
             this.logger.debug(
                 "manager",
                 `  No $${session.currentIndex + 1} found, looking for $0...`
             );
-            nextTabIndex = 0;
-            nextTabStop = session.stops.find((t) => t.index === 0);
         }
 
-        if (!nextTabStop) {
-            return null;
-        }
-
-        return { index: nextTabIndex, stop: nextTabStop };
+        return candidate;
     }
 
     private selectPrevTabStop(session: SnippetSessionEntry): JumpCandidate | null {
-        const prevTabIndex = session.currentIndex - 1;
-        const prevTabStop = session.stops.find((t) => t.index === prevTabIndex);
-        if (!prevTabStop) {
+        const currentStop = session.stops.find((s) => s.index === session.currentIndex);
+        if (!currentStop) {
             return null;
         }
-        return { index: prevTabIndex, stop: prevTabStop };
+
+        const strategy = this.jumpStrategySelector.getStrategy(currentStop);
+        return strategy.selectPrev(session, session.currentIndex);
     }
 
     private completeNextJumpTransition(
@@ -514,6 +529,11 @@ export class SnippetManager {
 
         this.focusStopByOffset(editor, candidate.stop);
         this.updateSnippetSessionIndex(editor, candidate.index);
+        
+        // Call placeholder strategy focus handler
+        const placeholderStrategy = this.placeholderStrategySelector.getStrategy(candidate.stop);
+        placeholderStrategy.onStopFocused?.(editor, candidate.stop);
+        
         return true;
     }
 
@@ -525,6 +545,10 @@ export class SnippetManager {
     ): boolean {
         this.focusStopByOffset(editor, candidate.stop);
         this.logger.debug("manager", `← Jump to tab stop $${candidate.index}`);
+        
+        // Call placeholder strategy focus handler
+        const placeholderStrategy = this.placeholderStrategySelector.getStrategy(candidate.stop);
+        placeholderStrategy.onStopFocused?.(editor, candidate.stop);
 
         if (candidate.index <= 0) {
             this.popSnippetSession(editor);
@@ -550,7 +574,7 @@ export class SnippetManager {
 
     private shouldExitBeforeCachingNextStop(
         editor: Editor,
-        candidate: { index: number; stop: SnippetSessionStop } | null,
+        candidate: JumpCandidate | null,
         currentStop?: SnippetSessionStop
     ): boolean {
         if (!candidate) {

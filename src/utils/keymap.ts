@@ -1,6 +1,6 @@
 import { Prec, type Extension } from '@codemirror/state';
 import { keymap, type EditorView } from '@codemirror/view';
-import type { SnippetMenuKeymap } from './types';
+import type { SnippetMenuKeymap } from '../types';
 
 interface TriggerKeymapConfig {
 	triggerKey: string;

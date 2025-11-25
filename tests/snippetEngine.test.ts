@@ -71,4 +71,78 @@ describe('SnippetEngine advanced matching', () => {
 		const result = engine.matchSnippetInContext('xt');
 		expect(result?.prefix).toBe('t');
 	});
+
+	it('handles empty snippet list', () => {
+		const engine = new SnippetEngine([]);
+		const result = engine.matchSnippetInContext('test');
+		expect(result).toBeUndefined();
+		expect(engine.getSnippets()).toEqual([]);
+	});
+
+	it('calculates prefix length range correctly for empty list', () => {
+		const engine = new SnippetEngine([]);
+		const prefixInfo = engine.getPrefixInfo();
+		expect(prefixInfo.minLength).toBe(0);
+		expect(prefixInfo.maxLength).toBe(0);
+	});
+
+	it('calculates prefix length range correctly for single snippet', () => {
+		const engine = new SnippetEngine([buildSnippet('test', 'content')]);
+		const prefixInfo = engine.getPrefixInfo();
+		expect(prefixInfo.minLength).toBe(4);
+		expect(prefixInfo.maxLength).toBe(4);
+	});
+
+	it('calculates prefix length range correctly for multiple snippets', () => {
+		const engine = new SnippetEngine([
+			buildSnippet('a', 'content'),
+			buildSnippet('ab', 'content'),
+			buildSnippet('abc', 'content'),
+			buildSnippet('abcd', 'content'),
+		]);
+		const prefixInfo = engine.getPrefixInfo();
+		expect(prefixInfo.minLength).toBe(1);
+		expect(prefixInfo.maxLength).toBe(4);
+	});
+
+	it('updates prefix length range when snippets are updated', () => {
+		const engine = new SnippetEngine([buildSnippet('short', 'content')]);
+		expect(engine.getPrefixInfo().maxLength).toBe(5);
+
+		engine.setSnippets([
+			buildSnippet('a', 'content'),
+			buildSnippet('verylongprefix', 'content'),
+		]);
+		const prefixInfo = engine.getPrefixInfo();
+		expect(prefixInfo.minLength).toBe(1);
+		expect(prefixInfo.maxLength).toBe(14);
+	});
+
+	it('returns undefined when matching with empty context', () => {
+		const engine = new SnippetEngine([buildSnippet('test', 'content')]);
+		const result = engine.matchSnippetInContext('');
+		expect(result).toBeUndefined();
+	});
+
+	it('handles context shorter than min prefix length', () => {
+		const engine = new SnippetEngine([buildSnippet('abcde', 'content')]);
+		const result = engine.matchSnippetInContext('ab');
+		expect(result).toBeUndefined();
+	});
+
+	it('handles context exactly at min prefix length', () => {
+		const engine = new SnippetEngine([
+			buildSnippet('ab', 'content'),
+			buildSnippet('abc', 'content'),
+		]);
+		const result = engine.matchSnippetInContext('ab');
+		expect(result?.prefix).toBe('ab');
+	});
+
+	it('handles context longer than max prefix length', () => {
+		const engine = new SnippetEngine([buildSnippet('test', 'content')]);
+		const longContext = 'a'.repeat(100) + 'test';
+		const result = engine.matchSnippetInContext(longContext);
+		expect(result?.prefix).toBe('test');
+	});
 });

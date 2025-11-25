@@ -4,12 +4,12 @@ import { PluginLogger } from '../src/logger';
 import { DEFAULT_RANKING_ALGORITHMS } from '../src/rankingConfig';
 import type { RankingAlgorithmSetting } from '../src/types';
 
-jest.mock('../src/editorUtils', () => ({
+jest.mock('../src/utils/editorUtils', () => ({
 	getActiveEditor: jest.fn(),
 	getEditorView: jest.fn().mockReturnValue(null),
 }));
 
-import { getActiveEditor } from '../src/editorUtils';
+import { getActiveEditor } from '../src/utils/editorUtils';
 
 const rankingAlgorithmNames = {
 	"fuzzy-match": "Fuzzy match",
@@ -349,6 +349,133 @@ describe('SnippetCompletionMenu UI flow', () => {
 
 		expect(menu.open(editor as any, '')).toBe(false);
 		expect(document.querySelector('.snippet-completion-menu')).toBeNull();
+	});
+
+	it('handles mouse click on snippet item', () => {
+		expect(menu.open(editor as any, '')).toBe(true);
+		const items = document.querySelectorAll('.snippet-completion-item');
+		expect(items.length).toBeGreaterThan(0);
+
+		const firstItem = items[0] as HTMLElement;
+		const mousedownEvent = new MouseEvent('mousedown', {
+			bubbles: true,
+			cancelable: true,
+		});
+		firstItem.dispatchEvent(mousedownEvent);
+
+		expect(manager.applySnippetAtCursor).toHaveBeenCalled();
+		expect(menu.isOpen()).toBe(false);
+	});
+
+	it('handles mouseenter on snippet item after mouse movement', () => {
+		expect(menu.open(editor as any, '')).toBe(true);
+		const items = document.querySelectorAll('.snippet-completion-item');
+		expect(items.length).toBeGreaterThan(0);
+
+		// Simulate mouse movement
+		window.dispatchEvent(new MouseEvent('pointermove'));
+
+		const secondItem = items[1] as HTMLElement;
+		const mouseenterEvent = new MouseEvent('mouseenter', {
+			bubbles: true,
+		});
+		secondItem.dispatchEvent(mouseenterEvent);
+
+		// Should update active index without applying
+		expect(manager.applySnippetAtCursor).not.toHaveBeenCalled();
+		expect(menu.isOpen()).toBe(true);
+	});
+
+	it('ignores mouseenter before mouse movement', () => {
+		expect(menu.open(editor as any, '')).toBe(true);
+		const items = document.querySelectorAll('.snippet-completion-item');
+		expect(items.length).toBeGreaterThan(0);
+
+		const secondItem = items[1] as HTMLElement;
+		const mouseenterEvent = new MouseEvent('mouseenter', {
+			bubbles: true,
+		});
+		secondItem.dispatchEvent(mouseenterEvent);
+
+		// Should not change selection before mouse movement
+		expect(menu.isOpen()).toBe(true);
+	});
+
+	it('displays empty state message when no snippets match', () => {
+		snippets = [
+			createSnippet('test', 'body'),
+			createSnippet('example', 'body'),
+		];
+		menu = new SnippetCompletionMenu(createApp(), {
+			getSnippets: () => snippets,
+			manager,
+			logger: new PluginLogger(),
+			getRankingAlgorithms: () => cloneDefaultRanking(),
+			getUsageCounts: () => new Map(),
+			getRankingAlgorithmNames: () => rankingAlgorithmNames,
+		});
+
+		expect(menu.open(editor as any, 'nonexistentprefix123')).toBe(true);
+		const emptyState = document.querySelector('.snippet-completion-empty');
+		expect(emptyState).not.toBeNull();
+		expect(emptyState?.textContent).toBeTruthy();
+		menu.close();
+	});
+
+	it('displays empty state when all snippets are filtered out', () => {
+		snippets = [
+			createSnippet('apple', 'body'),
+			createSnippet('banana', 'body'),
+		];
+		menu = new SnippetCompletionMenu(createApp(), {
+			getSnippets: () => snippets,
+			manager,
+			logger: new PluginLogger(),
+			getRankingAlgorithms: () => cloneDefaultRanking(),
+			getUsageCounts: () => new Map(),
+			getRankingAlgorithmNames: () => rankingAlgorithmNames,
+		});
+
+		expect(menu.open(editor as any, 'xyz')).toBe(true);
+		const emptyState = document.querySelector('.snippet-completion-empty');
+		expect(emptyState).not.toBeNull();
+		expect(emptyState?.textContent).toContain('No snippets match');
+		// When no matches, menu falls back to showing all snippets with empty state message
+		const items = document.querySelectorAll('.snippet-completion-item');
+		expect(items.length).toBeGreaterThan(0);
+		menu.close();
+	});
+
+	it('does not display empty state when snippets are available', () => {
+		expect(menu.open(editor as any, '')).toBe(true);
+		const emptyState = document.querySelector('.snippet-completion-empty');
+		expect(emptyState).toBeNull();
+		const items = document.querySelectorAll('.snippet-completion-item');
+		expect(items.length).toBeGreaterThan(0);
+		menu.close();
+	});
+
+	it('handles click outside menu to close', () => {
+		expect(menu.open(editor as any, '')).toBe(true);
+		expect(menu.isOpen()).toBe(true);
+
+		// Create an element outside the menu
+		const outsideElement = document.createElement('div');
+		document.body.appendChild(outsideElement);
+
+		const mousedownEvent = new MouseEvent('mousedown', {
+			bubbles: true,
+			cancelable: true,
+		});
+		// Set target to outside element
+		Object.defineProperty(mousedownEvent, 'target', {
+			writable: false,
+			value: outsideElement,
+		});
+		window.dispatchEvent(mousedownEvent);
+
+		expect(menu.isOpen()).toBe(false);
+		document.body.removeChild(outsideElement);
 	});
 });
 

@@ -1,5 +1,5 @@
 import type { Editor } from "obsidian";
-import type { PrefixInfo } from "./types";
+import type { PrefixInfo } from "../types";
 
 export interface PrefixContextOptions {
 	editor: Editor;

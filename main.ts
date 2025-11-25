@@ -19,15 +19,15 @@ import {
 import { SnippetManager } from "./src/snippetManager";
 import { PluginLogger } from "./src/logger";
 import type { DebugCategory } from "./src/logger";
-import { getActiveEditor, getEditorView } from "./src/editorUtils";
+import { getActiveEditor, getEditorView } from "./src/utils/editorUtils";
 import { TextSnippetsSettingsTab } from "./src/settingsTab";
-import { buildTriggerKeymapExtension } from "./src/keymap";
+import { buildTriggerKeymapExtension } from "./src/utils/keymap";
 import { SnippetCompletionMenu } from "./src/snippetSuggest";
 import {
 	getLocaleStrings,
 	type LocaleStrings,
 } from "./src/i18n";
-import { getContextBeforeCursor } from "./src/prefixContext";
+import { getContextBeforeCursor } from "./src/utils/prefixContext";
 import { normalizeRankingAlgorithms } from "./src/rankingConfig";
 import { incrementUsageCount, usageRecordToMap } from "./src/usageTracker";
 import {
