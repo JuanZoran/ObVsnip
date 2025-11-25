@@ -61,23 +61,28 @@ jobs:
           echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
           echo "Tag name: $TAG_NAME"
       
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ steps.tag.outputs.tag }}
-          name: Release ${{ steps.package-version.outputs.version }}
-          body: |
-            Release ${{ steps.package-version.outputs.version }}
-            
-            ## Installation
-            1. Download the zip file or individual files
-            2. Extract to your Obsidian vault's `.obsidian/plugins/obvsnip/` directory
-            3. Restart Obsidian
-          files: |
-            obvsnip-${{ steps.package-version.outputs.version }}.zip
-            build/manifest.json
-            build/main.js
+      - name: Create GitHub Release with assets
+        run: |
+          # Check if release already exists
+          if gh release view ${{ steps.tag.outputs.tag }} >/dev/null 2>&1; then
+            echo "Release already exists, updating..."
+            # Delete existing release to recreate with new assets
+            gh release delete ${{ steps.tag.outputs.tag }} --yes
+          fi
+          
+          # Create new release with assets
+          gh release create ${{ steps.tag.outputs.tag }} \
+            --title "Release ${{ steps.package-version.outputs.version }}" \
+            --notes "Release ${{ steps.package-version.outputs.version }}
+          
+          ## Installation
+          1. Download the zip file or individual files
+          2. Extract to your Obsidian vault's \`.obsidian/plugins/obvsnip/\` directory
+          3. Restart Obsidian" \
+            obvsnip-${{ steps.package-version.outputs.version }}.zip \
+            build/manifest.json \
+            build/main.js \
             build/styles.css
-          draft: false
-          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
