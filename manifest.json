@@ -3,9 +3,8 @@
 	"name": "ObVsnip",
 	"version": "0.0.1",
 	"minAppVersion": "0.15.0",
-	"description": "为Obsidian添加VSCode风格的代码片段支持。",
+	"description": "Add VSCode like snippet support for Obsidian",
 	"author": "zoran",
 	"authorUrl": "https://github.com/JuanZoran",
-	"fundingUrl": "https://github.com/JuanZoran",
 	"isDesktopOnly": true
 }

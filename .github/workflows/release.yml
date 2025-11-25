@@ -1,0 +1,83 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Read version from package.json
+        id: package-version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version from package.json: $VERSION"
+      
+      - name: Update manifest.json and versions.json
+        run: node version-bump.mjs
+        env:
+          npm_package_version: ${{ steps.package-version.outputs.version }}
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build plugin
+        run: npm run build
+      
+      - name: Verify build files exist
+        run: |
+          if [ ! -f "build/manifest.json" ] || [ ! -f "build/main.js" ] || [ ! -f "build/styles.css" ]; then
+            echo "Error: Required build files are missing"
+            exit 1
+          fi
+          echo "All build files verified"
+      
+      - name: Create zip archive
+        run: |
+          cd build
+          zip -r ../obvsnip-${{ steps.package-version.outputs.version }}.zip manifest.json main.js styles.css
+          cd ..
+          echo "Zip archive created: obvsnip-${{ steps.package-version.outputs.version }}.zip"
+      
+      - name: Extract tag name
+        id: tag
+        run: |
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "Tag name: $TAG_NAME"
+      
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: Release ${{ steps.package-version.outputs.version }}
+          body: |
+            Release ${{ steps.package-version.outputs.version }}
+            
+            ## Installation
+            1. Download the zip file or individual files
+            2. Extract to your Obsidian vault's `.obsidian/plugins/obvsnip/` directory
+            3. Restart Obsidian
+          files: |
+            obvsnip-${{ steps.package-version.outputs.version }}.zip
+            build/manifest.json
+            build/main.js
+            build/styles.css
+          draft: false
+          prerelease: false
+

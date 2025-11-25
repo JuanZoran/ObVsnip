@@ -425,3 +425,4 @@ ObVsnip 支持以下内置变量：
 - 查看 [TabStop 策略文档](./tabstop-strategy.md) 了解跳转策略
 - 在设置页面查看所有内置变量的详细说明
 
+
