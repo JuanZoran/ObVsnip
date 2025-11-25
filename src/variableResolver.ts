@@ -24,19 +24,52 @@ const readClipboardText = (): string | null => {
 	return null;
 };
 
+/**
+ * Get current date/time values in a single call to avoid multiple Date() instantiations
+ */
+const getCurrentDateTime = () => {
+	const now = new Date();
+	return {
+		year: now.getFullYear(),
+		month: now.getMonth() + 1,
+		date: now.getDate(),
+		hours: now.getHours(),
+		minutes: now.getMinutes(),
+		seconds: now.getSeconds(),
+	};
+};
+
+/**
+ * Create a cached getter function
+ * @param factory Function that produces the value to cache
+ * @returns A getter function that caches the result of the factory
+ */
+function createCachedGetter<T>(factory: () => T): () => T {
+	let cached: T | undefined;
+	return () => cached ??= factory();
+}
+
 export const resolveVariableValue = (
 	name: string,
 	context: VariableContext
 ): VariableResolution => {
+	// Cache active file for variables that need it
+	const getActiveFile = createCachedGetter(() =>
+		context.app.workspace.getActiveFile()
+	);
+
+	// Cache datetime for date/time variables
+	const getCachedDateTime = createCachedGetter(getCurrentDateTime);
+
 	switch (name) {
 		case "TM_FILENAME": {
-			const file = context.app.workspace.getActiveFile();
+			const file = getActiveFile();
 			return file
 				? { value: file.name }
 				: { value: null, reason: "No active file" };
 		}
 		case "TM_FILEPATH": {
-			const file = context.app.workspace.getActiveFile();
+			const file = getActiveFile();
 			return file
 				? { value: file.path }
 				: { value: null, reason: "No active file" };
@@ -48,7 +81,7 @@ export const resolveVariableValue = (
 				: { value: null, reason: "No selection" };
 		}
 		case "TM_FOLDER": {
-			const file = context.app.workspace.getActiveFile();
+			const file = getActiveFile();
 			return file && file.parent
 				? { value: file.parent.name }
 				: { value: null, reason: "No parent folder" };
@@ -64,39 +97,35 @@ export const resolveVariableValue = (
 			return { value };
 		}
 		case "CURRENT_YEAR": {
-			const now = new Date();
-			return { value: String(now.getFullYear()) };
+			const dt = getCachedDateTime();
+			return { value: String(dt.year) };
 		}
 		case "CURRENT_MONTH": {
-			const now = new Date();
-			return { value: pad(now.getMonth() + 1) };
+			const dt = getCachedDateTime();
+			return { value: pad(dt.month) };
 		}
 		case "CURRENT_DATE": {
-			const now = new Date();
+			const dt = getCachedDateTime();
 			return {
-				value: `${now.getFullYear()}-${pad(
-					now.getMonth() + 1
-				)}-${pad(now.getDate())}`,
+				value: `${dt.year}-${pad(dt.month)}-${pad(dt.date)}`,
 			};
 		}
 		case "CURRENT_HOUR": {
-			const now = new Date();
-			return { value: pad(now.getHours()) };
+			const dt = getCachedDateTime();
+			return { value: pad(dt.hours) };
 		}
 		case "CURRENT_MINUTE": {
-			const now = new Date();
-			return { value: pad(now.getMinutes()) };
+			const dt = getCachedDateTime();
+			return { value: pad(dt.minutes) };
 		}
 		case "CURRENT_SECOND": {
-			const now = new Date();
-			return { value: pad(now.getSeconds()) };
+			const dt = getCachedDateTime();
+			return { value: pad(dt.seconds) };
 		}
 		case "TIME_FORMATTED": {
-			const now = new Date();
+			const dt = getCachedDateTime();
 			return {
-				value: `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(
-					now.getSeconds()
-				)}`,
+				value: `${pad(dt.hours)}:${pad(dt.minutes)}:${pad(dt.seconds)}`,
 			};
 		}
 		default:

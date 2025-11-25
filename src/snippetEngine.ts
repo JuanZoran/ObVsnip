@@ -41,10 +41,12 @@ export class SnippetEngine {
 		for (const snippet of this.snippets) {
 			let node = this.trie;
 			for (const char of snippet.prefix) {
-				if (!node.children.has(char)) {
-					node.children.set(char, { children: new Map() });
+				let nextNode = node.children.get(char);
+				if (!nextNode) {
+					nextNode = { children: new Map() };
+					node.children.set(char, nextNode);
 				}
-				node = node.children.get(char)!;
+				node = nextNode;
 			}
 			node.snippet = snippet;
 		}

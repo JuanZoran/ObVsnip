@@ -52,18 +52,28 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 		this.plugin = plugin;
 	}
 
+	/**
+	 * Helper method to save settings and apply runtime changes
+	 * Reduces code duplication across settings handlers
+	 */
+	private async saveAndApplySettings(): Promise<void> {
+		await this.plugin.saveSettings();
+		this.plugin.applyRuntimeSettings();
+	}
+
 	display(): void {
 		const { containerEl } = this;
 		const strings = this.plugin.getStrings().settings;
 		containerEl.empty();
 		containerEl.createEl("h2", { text: strings.title });
-		this.createFileSelectionSetting();
-		this.createSettingsSection();
+		this.createFileSelectionSetting(strings);
+		this.createSettingsSection(strings);
 	}
 
-	private createFileSelectionSetting(): void {
+	private createFileSelectionSetting(
+		strings: ReturnType<TextSnippetsPlugin["getStrings"]>["settings"]
+	): void {
 		const { containerEl } = this;
-		const strings = this.plugin.getStrings().settings;
 
 		containerEl.createEl("h3", { text: strings.snippetFilesListName });
 		containerEl.createEl("p", { text: strings.snippetFilesListDesc });
@@ -90,10 +100,12 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 			);
 	}
 
-	private createSettingsSection(): void {
-		const strings = this.plugin.getStrings().settings;
+	private createSettingsSection(
+		strings: ReturnType<TextSnippetsPlugin["getStrings"]>["settings"]
+	): void {
 		this.renderTriggerSettings(strings);
 		this.renderPickerSettings(strings);
+		this.renderReferenceSnippetSettings(strings);
 		this.renderRankingSettings(strings);
 		this.renderVirtualTextSettings(strings);
 		this.renderDebugSettings(strings);
@@ -113,8 +125,7 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.triggerKey)
 					.onChange(async (value) => {
 						this.plugin.settings.triggerKey = value.trim() || "Tab";
-						await this.plugin.saveSettings();
-						this.plugin.applyRuntimeSettings();
+						await this.saveAndApplySettings();
 					})
 			);
 	}
@@ -127,34 +138,85 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 		containerEl.createEl("p", {
 			text: strings.pickerHint,
 		});
-		this.addMenuKeySetting(
-			containerEl,
-			"next",
-			strings.menuKeys.nextName,
-			strings.menuKeys.nextDesc,
-			"ArrowDown"
-		);
-		this.addMenuKeySetting(
-			containerEl,
-			"prev",
-			strings.menuKeys.prevName,
-			strings.menuKeys.prevDesc,
-			"ArrowUp"
-		);
-		this.addMenuKeySetting(
-			containerEl,
-			"accept",
-			strings.menuKeys.acceptName,
-			strings.menuKeys.acceptDesc,
-			"Enter"
-		);
-		this.addMenuKeySetting(
-			containerEl,
-			"toggle",
-			strings.menuKeys.toggleName,
-			strings.menuKeys.toggleDesc,
-			"Mod-Shift-S"
-		);
+		
+		const menuKeyConfigs: Array<{
+			key: keyof SnippetMenuKeymap;
+			name: string;
+			desc: string;
+			placeholder: string;
+		}> = [
+			{
+				key: "next",
+				name: strings.menuKeys.nextName,
+				desc: strings.menuKeys.nextDesc,
+				placeholder: "ArrowDown",
+			},
+			{
+				key: "prev",
+				name: strings.menuKeys.prevName,
+				desc: strings.menuKeys.prevDesc,
+				placeholder: "ArrowUp",
+			},
+			{
+				key: "accept",
+				name: strings.menuKeys.acceptName,
+				desc: strings.menuKeys.acceptDesc,
+				placeholder: "Enter",
+			},
+			{
+				key: "toggle",
+				name: strings.menuKeys.toggleName,
+				desc: strings.menuKeys.toggleDesc,
+				placeholder: "Mod-Shift-S",
+			},
+		];
+		
+		menuKeyConfigs.forEach((config) => {
+			this.addMenuKeySetting(
+				containerEl,
+				config.key,
+				config.name,
+				config.desc,
+				config.placeholder
+			);
+		});
+	}
+
+	private renderReferenceSnippetSettings(
+		strings: ReturnType<TextSnippetsPlugin["getStrings"]>["settings"]
+	): void {
+		const { containerEl } = this;
+		containerEl.createEl("h3", { text: strings.referenceSection });
+		containerEl.createEl("p", {
+			text: strings.referenceSectionDesc,
+			cls: "setting-item-description",
+		});
+
+		new Setting(containerEl)
+			.setName(strings.referenceEnabledName)
+			.setDesc(strings.referenceEnabledDesc)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.referenceSnippetEnabled)
+					.onChange(async (value) => {
+						this.plugin.settings.referenceSnippetEnabled = value;
+						await this.saveAndApplySettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName(strings.referenceSyncModeName)
+			.setDesc(strings.referenceSyncModeDesc)
+			.addDropdown((dropdown) => {
+				dropdown
+					.addOption("realtime", strings.referenceSyncModeRealtime)
+					.addOption("on-jump", strings.referenceSyncModeOnJump)
+					.setValue(this.plugin.settings.referenceSyncMode)
+					.onChange(async (value: "realtime" | "on-jump") => {
+						this.plugin.settings.referenceSyncMode = value;
+						await this.saveAndApplySettings();
+					});
+			});
 	}
 
 	private renderRankingSettings(
@@ -179,8 +241,7 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.showVirtualText)
 					.onChange(async (value) => {
 						this.plugin.settings.showVirtualText = value;
-						await this.plugin.saveSettings();
-						this.plugin.applyRuntimeSettings();
+						await this.saveAndApplySettings();
 					})
 			);
 
@@ -192,70 +253,75 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 		);
 		controls.render(containerEl);
 
-		this.addColorSetting(
-			containerEl,
-			strings.placeholderColorName,
-			strings.placeholderColorDesc,
-			this.plugin.settings.virtualTextColor,
-			async (value) => {
-				this.plugin.settings.virtualTextColor = value || "";
-				await this.plugin.saveSettings();
-				this.plugin.applyRuntimeSettings();
-				this.updateVirtualPreviewStyles();
-			}
-		);
+		const colorConfigs: Array<{
+			name: string;
+			desc: string;
+			getValue: () => string;
+			setValue: (value: string) => void;
+			requiresPreviewUpdate?: boolean;
+		}> = [
+			{
+				name: strings.placeholderColorName,
+				desc: strings.placeholderColorDesc,
+				getValue: () => this.plugin.settings.virtualTextColor,
+				setValue: (value) => {
+					this.plugin.settings.virtualTextColor = value;
+				},
+				requiresPreviewUpdate: true,
+			},
+			{
+				name: strings.choiceHighlightName,
+				desc: strings.choiceHighlightDesc,
+				getValue: () => this.plugin.settings.choiceHighlightColor,
+				setValue: (value) => {
+					this.plugin.settings.choiceHighlightColor = value;
+				},
+				requiresPreviewUpdate: true,
+			},
+			{
+				name: strings.choiceInactiveName,
+				desc: strings.choiceInactiveDesc,
+				getValue: () => this.plugin.settings.choiceInactiveColor,
+				setValue: (value) => {
+					this.plugin.settings.choiceInactiveColor = value;
+				},
+				requiresPreviewUpdate: true,
+			},
+			{
+				name: strings.placeholderActiveName,
+				desc: strings.placeholderActiveDesc,
+				getValue: () => this.plugin.settings.placeholderActiveColor,
+				setValue: (value) => {
+					this.plugin.settings.placeholderActiveColor = value;
+				},
+				requiresPreviewUpdate: true,
+			},
+			{
+				name: strings.ghostTextName,
+				desc: strings.ghostTextDesc,
+				getValue: () => this.plugin.settings.ghostTextColor,
+				setValue: (value) => {
+					this.plugin.settings.ghostTextColor = value;
+				},
+				requiresPreviewUpdate: true,
+			},
+		];
 
-		this.addColorSetting(
-			containerEl,
-			strings.choiceHighlightName,
-			strings.choiceHighlightDesc,
-			this.plugin.settings.choiceHighlightColor,
-			async (value) => {
-				this.plugin.settings.choiceHighlightColor = value || "";
-				await this.plugin.saveSettings();
-				this.plugin.applyRuntimeSettings();
-				this.updateVirtualPreviewStyles();
-			}
-		);
-
-		this.addColorSetting(
-			containerEl,
-			strings.choiceInactiveName,
-			strings.choiceInactiveDesc,
-			this.plugin.settings.choiceInactiveColor,
-			async (value) => {
-				this.plugin.settings.choiceInactiveColor = value || "";
-				await this.plugin.saveSettings();
-				this.plugin.applyRuntimeSettings();
-				this.updateVirtualPreviewStyles();
-			}
-		);
-
-		this.addColorSetting(
-			containerEl,
-			strings.placeholderActiveName,
-			strings.placeholderActiveDesc,
-			this.plugin.settings.placeholderActiveColor,
-			async (value) => {
-				this.plugin.settings.placeholderActiveColor = value || "";
-				await this.plugin.saveSettings();
-				this.plugin.applyRuntimeSettings();
-				this.updateVirtualPreviewStyles();
-			}
-		);
-
-		this.addColorSetting(
-			containerEl,
-			strings.ghostTextName,
-			strings.ghostTextDesc,
-			this.plugin.settings.ghostTextColor,
-			async (value) => {
-				this.plugin.settings.ghostTextColor = value || "";
-				await this.plugin.saveSettings();
-				this.plugin.applyRuntimeSettings();
-				this.updateVirtualPreviewStyles();
-			}
-		);
+		colorConfigs.forEach((config) => {
+			this.addColorSetting(
+				containerEl,
+				config.name,
+				config.desc,
+				config.getValue(),
+				async (newValue) => {
+					config.setValue(newValue || "");
+					await this.saveAndApplySettings();
+					if (config.requiresPreviewUpdate) {
+						this.updateVirtualPreviewStyles();
+					}
+				}
+			);
+		});
 
 		this.renderVirtualTextPreview(containerEl, strings);
 	}
@@ -281,8 +347,7 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.enableDebugLogs)
 					.onChange(async (value) => {
 						this.plugin.settings.enableDebugLogs = value;
-						await this.plugin.saveSettings();
-						this.plugin.applyRuntimeSettings();
+						await this.saveAndApplySettings();
 						this.toggleDebugModuleControls(modulesWrapper, value);
 					})
 			);
@@ -325,8 +390,7 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 							this.plugin.settings.debugCategories = Array.from(
 								categories
 							);
-							await this.plugin.saveSettings();
-							this.plugin.applyRuntimeSettings();
+							await this.saveAndApplySettings();
 						})
 				);
 			const rowEl = debugRow.settingEl;
@@ -622,8 +686,7 @@ export class TextSnippetsSettingsTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.menuKeymap[key] || "")
 					.onChange(async (value) => {
 						this.plugin.settings.menuKeymap[key] = value.trim();
-						await this.plugin.saveSettings();
-						this.plugin.applyRuntimeSettings();
+						await this.saveAndApplySettings();
 					})
 			);
 	}

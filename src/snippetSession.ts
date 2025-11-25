@@ -1,5 +1,8 @@
-import { ChangeDesc, EditorState, Extension, RangeSetBuilder, StateEffect, StateField } from '@codemirror/state';
+import { ChangeDesc, EditorState, Extension, RangeSetBuilder, StateEffect, StateField, Transaction } from '@codemirror/state';
 import { Decoration, DecorationSet, EditorView, ViewPlugin, ViewUpdate, WidgetType } from '@codemirror/view';
+import { buildSnippetStyleAttributes } from './utils/styleUtils';
+import { findStopByIndex, findNextStop, isReferenceStop } from './utils/stopUtils';
+import { renderChoiceList } from './utils/choiceUtils';
 
 export interface SnippetWidgetConfig {
 	enabled: boolean;
@@ -16,6 +19,9 @@ export interface SnippetSessionStop {
 	end: number;
 	label?: string;
 	choices?: string[];
+	type?: 'standard' | 'reference' | 'function';  // stop 类型
+	referenceGroup?: string;  // 引用组标识
+	linkedStops?: number[];  // 存储同一引用组的其他 stop 索引（在 session.stops 中的索引）
 }
 
 export interface SnippetSessionEntry {
@@ -29,7 +35,28 @@ const DEFAULT_WIDGET_CONFIG: SnippetWidgetConfig = {
 	enabled: true,
 };
 
+// Debug logging for reference realtime sync (controlled by plugin settings)
+let debugRealtimeSyncEnabled = false;
+export const setDebugRealtimeSync = (enabled: boolean): void => {
+	debugRealtimeSyncEnabled = enabled;
+};
+
+const logRealtimeDebug = (...args: unknown[]): void => {
+	if (!debugRealtimeSyncEnabled) return;
+	console.debug('[ReferenceRealtime]', ...args);
+};
+
 let widgetConfig: SnippetWidgetConfig = { ...DEFAULT_WIDGET_CONFIG };
+
+// Realtime sync callback for reference stops
+type RealtimeSyncCallback = (view: EditorView, session: SnippetSessionEntry, currentStop: SnippetSessionStop) => void;
+let realtimeSyncCallback: RealtimeSyncCallback | null = null;
+
+export const setRealtimeSyncCallback = (callback: RealtimeSyncCallback | null): void => {
+	realtimeSyncCallback = callback;
+};
+
+export const getRealtimeSyncCallback = (): RealtimeSyncCallback | null => realtimeSyncCallback;
 
 const mapStops = (stops: SnippetSessionStop[], change: ChangeDesc): SnippetSessionStop[] =>
 	stops.map(stop => ({
@@ -47,6 +74,7 @@ const mapStack = (stack: SnippetSessionStack, change: ChangeDesc): SnippetSessio
 export const pushSnippetSessionEffect = StateEffect.define<SnippetSessionEntry>();
 export const popSnippetSessionEffect = StateEffect.define<void>();
 export const updateSnippetSessionEffect = StateEffect.define<{ currentIndex: number }>();
+export const replaceSnippetSessionEffect = StateEffect.define<SnippetSessionEntry>();
 export const clearSnippetSessionsEffect = StateEffect.define<void>();
 
 export const snippetSessionField = StateField.define<SnippetSessionStack>({
@@ -69,6 +97,12 @@ export const snippetSessionField = StateField.define<SnippetSessionStack>({
 				current = [
 					...current.slice(0, -1),
 					{ ...updated, currentIndex: effect.value.currentIndex },
+				];
+			} else if (effect.is(replaceSnippetSessionEffect)) {
+				if (current.length === 0) continue;
+				current = [
+					...current.slice(0, -1),
+					effect.value,
 				];
 			} else if (effect.is(clearSnippetSessionsEffect)) {
 				current = [];
@@ -134,17 +168,8 @@ export class ChoiceHintWidget extends WidgetType {
 		const listEl = document.createElement('span');
 		listEl.className = 'snippet-choice-hint-list';
 
-		this.choices.forEach((choice, index) => {
-			const choiceEl = document.createElement('span');
-			choiceEl.className = 'snippet-choice-entry';
-			choiceEl.textContent = choice;
-			if (choice === this.activeChoice) {
-				choiceEl.classList.add('snippet-choice-entry-active');
-			}
-			listEl.appendChild(choiceEl);
-			if (index < this.choices.length - 1) {
-				listEl.appendChild(document.createTextNode('/'));
-			}
+		renderChoiceList(listEl, this.choices, {
+			activeChoice: this.activeChoice,
 		});
 
 		wrapper.appendChild(listEl);
@@ -185,11 +210,14 @@ const buildDecorations = (state: EditorState): DecorationSet => {
 		}
 
 		const isActive = stop.index === session.currentIndex;
+		const isEmpty = stop.start === stop.end;
 
-		if (stop.start === stop.end && !isActive) {
+		// Skip empty stops unless they're active
+		if (isEmpty && !isActive) {
 			continue;
 		}
 
+		// Skip active stops that don't match selection
 		if (
 			isActive &&
 			(selection.from !== stop.start || selection.to !== stop.end)
@@ -197,41 +225,8 @@ const buildDecorations = (state: EditorState): DecorationSet => {
 			continue;
 		}
 
-		if (stop.start === stop.end) {
-			continue;
-		}
-
 		const className = isActive ? 'cm-snippet-placeholder-active' : 'cm-snippet-placeholder';
-		const styleParts: string[] = [];
-		if (widgetConfig.placeholderColor) {
-			styleParts.push(
-				`--snippet-placeholder-color: ${widgetConfig.placeholderColor}`
-			);
-		}
-		if (widgetConfig.placeholderActiveColor) {
-			styleParts.push(
-				`--snippet-placeholder-active-color: ${widgetConfig.placeholderActiveColor}`
-			);
-		}
-		if (widgetConfig.ghostTextColor) {
-			styleParts.push(
-				`--snippet-ghost-text-color: ${widgetConfig.ghostTextColor}`
-			);
-		}
-		if (widgetConfig.choiceActiveColor) {
-			styleParts.push(
-				`--snippet-choice-active-color: ${widgetConfig.choiceActiveColor}`
-			);
-		}
-		if (widgetConfig.choiceInactiveColor) {
-			styleParts.push(
-				`--snippet-choice-inactive-color: ${widgetConfig.choiceInactiveColor}`
-			);
-		}
-		const attributes =
-			styleParts.length > 0
-				? { style: styleParts.join(";") }
-				: undefined;
+		const attributes = buildSnippetStyleAttributes(widgetConfig);
 
 		pending.push({
 			from: stop.start,
@@ -262,11 +257,8 @@ const buildDecorations = (state: EditorState): DecorationSet => {
 			}
 	}
 
-	let nextStop =
-		session.stops.find((stop: SnippetSessionStop) => stop.index === session.currentIndex + 1) ??
-		(session.currentIndex !== 0
-			? session.stops.find((stop: SnippetSessionStop) => stop.index === 0)
-			: undefined);
+	const nextStopCandidate = findNextStop(session, session.currentIndex);
+	const nextStop = nextStopCandidate ?? undefined;
 
 	if (nextStop) {
 	const widget = Decoration.widget({
@@ -297,18 +289,122 @@ const buildDecorations = (state: EditorState): DecorationSet => {
 export const snippetSessionPlugin = ViewPlugin.fromClass(
 	class {
 		decorations: DecorationSet;
+		private lastDocLength: number = 0;
+		private lastSelection: { from: number; to: number } | null = null;
 
 		constructor(view: EditorView) {
 			this.decorations = buildDecorations(view.state);
+			this.lastDocLength = view.state.doc.length;
+			this.lastSelection = view.state.selection.main;
 		}
 
 		update(update: ViewUpdate) {
-			if (
-				update.docChanged ||
-				update.selectionSet ||
-				update.startState.field(snippetSessionField) !== update.state.field(snippetSessionField)
-			) {
+			const docChanged = update.docChanged;
+			const selectionChanged = update.selectionSet;
+			const sessionChanged = update.startState.field(snippetSessionField) !== update.state.field(snippetSessionField);
+			// Detect structural session changes (push/pop/replace/clear) so realtime sync only skips when session stack itself is modified
+			const sessionChangedByEffect = update.transactions.some(tr =>
+				tr.effects.some(effect =>
+					effect.is(pushSnippetSessionEffect) ||
+					effect.is(popSnippetSessionEffect) ||
+					effect.is(replaceSnippetSessionEffect) ||
+					effect.is(clearSnippetSessionsEffect)
+				)
+			);
+
+			if (docChanged || selectionChanged || sessionChanged) {
 				this.decorations = buildDecorations(update.state);
+			}
+
+			// Handle realtime sync for reference stops
+			if (docChanged && realtimeSyncCallback && !sessionChangedByEffect) {
+				// Skip if this change was triggered by snippet sync (avoid infinite loop)
+				const isSnippetSync = update.transactions.some(tr => 
+					tr.annotation(Transaction.userEvent) === 'snippet-sync'
+				);
+				if (isSnippetSync) {
+					logRealtimeDebug('Skip realtime sync (snippet-sync transaction)');
+					return;
+				}
+				
+				// Only sync if session didn't change structurally (to avoid syncing during session push/pop)
+				const stack = update.state.field(snippetSessionField);
+				if (!stack || stack.length === 0) {
+					logRealtimeDebug('Skip realtime sync (no session stack)');
+					return;
+				}
+
+				const session = stack[stack.length - 1];
+				if (session.currentIndex < 0) {
+					logRealtimeDebug('Skip realtime sync (invalid currentIndex)', session.currentIndex);
+					return;
+				}
+
+				const selection = update.state.selection.main;
+
+				// Find the reference stop that the cursor is currently inside (for duplicate indices, use range match)
+				const currentStop = session.stops.find((stop) =>
+					isReferenceStop(stop) &&
+					stop.index === session.currentIndex &&
+					selection.from >= stop.start &&
+					selection.from <= stop.end
+				);
+
+				if (!currentStop) {
+					logRealtimeDebug('Skip realtime sync (no reference stop matching selection)', {
+						currentIndex: session.currentIndex,
+						selection: { from: selection.from, to: selection.to },
+					});
+					return;
+				}
+
+				const changes = update.changes;
+				let changeInCurrentStop = false;
+
+				// Check whether any change range overlaps the current stop (using new positions)
+				changes.iterChanges((_fromA, _toA, fromB, toB) => {
+					const overlaps = fromB <= currentStop.end && toB >= currentStop.start;
+					if (overlaps) {
+						changeInCurrentStop = true;
+					}
+				});
+
+				// Also allow trigger when selection is inside the stop even if change range was zero-length at boundary
+				if (!changeInCurrentStop && selection.from >= currentStop.start && selection.from <= currentStop.end) {
+					changeInCurrentStop = true;
+				}
+
+				if (changeInCurrentStop && realtimeSyncCallback) {
+					logRealtimeDebug('Trigger realtime sync', {
+						currentIndex: currentStop.index,
+						selection: { from: selection.from, to: selection.to },
+						stopRange: { start: currentStop.start, end: currentStop.end },
+						changeDesc: changes.toString(),
+					});
+					// Dispatching view updates during a ViewPlugin.update causes nested update errors.
+					// Defer the sync to the next task so CodeMirror completes the current update cycle first.
+					const callback = realtimeSyncCallback;
+					setTimeout(() => {
+						if (!callback) return;
+						logRealtimeDebug('Execute deferred realtime sync', {
+							currentIndex: currentStop.index,
+							selection: { from: selection.from, to: selection.to },
+							stopRange: { start: currentStop.start, end: currentStop.end },
+						});
+						callback(update.view, session, currentStop);
+					}, 0);
+				} else {
+					logRealtimeDebug('Skip realtime sync (no overlap with current reference stop)', {
+						currentIndex: currentStop.index,
+						selection: { from: selection.from, to: selection.to },
+						stopRange: { start: currentStop.start, end: currentStop.end },
+						changeDesc: changes.toString(),
+					});
+				}
+			}
+
+			if (selectionChanged) {
+				this.lastSelection = update.state.selection.main;
 			}
 		}
 	},

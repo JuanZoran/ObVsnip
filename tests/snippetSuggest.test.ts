@@ -7,6 +7,7 @@ import type { RankingAlgorithmSetting } from '../src/types';
 jest.mock('../src/utils/editorUtils', () => ({
 	getActiveEditor: jest.fn(),
 	getEditorView: jest.fn().mockReturnValue(null),
+	getCursorCoords: jest.fn().mockReturnValue({ top: 100, left: 200 }),
 }));
 
 import { getActiveEditor } from '../src/utils/editorUtils';

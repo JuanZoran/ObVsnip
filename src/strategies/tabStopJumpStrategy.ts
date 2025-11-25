@@ -1,6 +1,7 @@
-import type { Editor } from "obsidian";
 import type { SnippetSessionEntry, SnippetSessionStop } from "../snippetSession";
 import type { PluginSettings } from "../types";
+import { findNextStop, findPrevStop } from "../utils/stopUtils";
+import { StrategySelector } from "./strategySelector";
 
 /**
  * Represents a candidate for tab stop jump
@@ -40,36 +41,46 @@ export interface TabStopJumpStrategy {
 }
 
 /**
+ * Shared implementation for index-based jump logic
+ * Used by both StandardJumpStrategy and ReferenceJumpStrategy
+ */
+function selectNextByIndex(
+    session: SnippetSessionEntry,
+    currentIndex: number
+): JumpCandidate | null {
+    const nextStop = findNextStop(session, currentIndex);
+    if (!nextStop) {
+        return null;
+    }
+    return { index: nextStop.index, stop: nextStop };
+}
+
+/**
+ * Shared implementation for previous jump logic
+ * Used by both StandardJumpStrategy and ReferenceJumpStrategy
+ */
+function selectPrevByIndex(
+    session: SnippetSessionEntry,
+    currentIndex: number
+): JumpCandidate | null {
+    const prevStop = findPrevStop(session, currentIndex);
+    if (!prevStop) {
+        return null;
+    }
+    return { index: prevStop.index, stop: prevStop };
+}
+
+/**
  * Standard jump strategy - the default behavior
  * Implements simple index-based navigation
  */
 export class StandardJumpStrategy implements TabStopJumpStrategy {
     selectNext(session: SnippetSessionEntry, currentIndex: number): JumpCandidate | null {
-        let nextTabIndex = currentIndex + 1;
-        let nextTabStop = session.stops.find((t) => t.index === nextTabIndex);
-        
-        // If no next stop found and not at $0, try to jump to $0
-        if (!nextTabStop && currentIndex !== 0) {
-            nextTabIndex = 0;
-            nextTabStop = session.stops.find((t) => t.index === 0);
-        }
-
-        if (!nextTabStop) {
-            return null;
-        }
-
-        return { index: nextTabIndex, stop: nextTabStop };
+        return selectNextByIndex(session, currentIndex);
     }
 
     selectPrev(session: SnippetSessionEntry, currentIndex: number): JumpCandidate | null {
-        const prevTabIndex = currentIndex - 1;
-        const prevTabStop = session.stops.find((t) => t.index === prevTabIndex);
-        
-        if (!prevTabStop) {
-            return null;
-        }
-        
-        return { index: prevTabIndex, stop: prevTabStop };
+        return selectPrevByIndex(session, currentIndex);
     }
 
     matches(_stop: SnippetSessionStop): boolean {
@@ -79,42 +90,49 @@ export class StandardJumpStrategy implements TabStopJumpStrategy {
 }
 
 /**
+ * Reference jump strategy - handles reference-type tab stops
+ * For reference stops, jump logic is the same as standard (based on index)
+ * The synchronization behavior is handled separately
+ */
+export class ReferenceJumpStrategy implements TabStopJumpStrategy {
+    selectNext(session: SnippetSessionEntry, currentIndex: number): JumpCandidate | null {
+        return selectNextByIndex(session, currentIndex);
+    }
+
+    selectPrev(session: SnippetSessionEntry, currentIndex: number): JumpCandidate | null {
+        return selectPrevByIndex(session, currentIndex);
+    }
+
+    matches(stop: SnippetSessionStop): boolean {
+        // Match reference-type stops
+        return stop.type === 'reference';
+    }
+}
+
+/**
  * Selector for choosing the appropriate jump strategy
  */
-export class TabStopJumpStrategySelector {
-    private strategies: TabStopJumpStrategy[];
-    private defaultStrategy: TabStopJumpStrategy;
-
+export class TabStopJumpStrategySelector extends StrategySelector<TabStopJumpStrategy> {
     constructor() {
-        this.defaultStrategy = new StandardJumpStrategy();
-        this.strategies = [this.defaultStrategy];
+        const defaultStrategy = new StandardJumpStrategy();
+        // Register strategies in priority order: function > reference > standard
+        // Note: function strategy will be added in phase 3
+        super(defaultStrategy, [
+            new ReferenceJumpStrategy(),
+            defaultStrategy,
+        ]);
     }
 
     /**
-     * Get the appropriate jump strategy for a given stop
-     * @param stop The tab stop to get strategy for
-     * @param settings Plugin settings (for future use with feature flags)
-     * @returns The matching strategy, or default if none match
+     * Override beforeMatch to check if reference snippets are enabled
      */
-    getStrategy(stop: SnippetSessionStop, settings?: PluginSettings): TabStopJumpStrategy {
-        // In phase 1, we only have StandardJumpStrategy
-        // Future phases will check settings and match by priority: function > reference > standard
-        for (const strategy of this.strategies) {
-            if (strategy.matches(stop)) {
-                // Phase 1: No feature flags to check yet
-                // Future: if (this.isStrategyEnabled(strategy, stop, settings)) {
-                return strategy;
-            }
+    protected beforeMatch(stop: SnippetSessionStop, settings?: PluginSettings): boolean | undefined {
+        // Check if reference snippets are enabled
+        if (stop.type === 'reference' && settings && !settings.referenceSnippetEnabled) {
+            // If disabled, fall back to standard strategy
+            return true;
         }
-        return this.defaultStrategy;
-    }
-
-    /**
-     * Add a new strategy to the selector
-     * @param strategy The strategy to add
-     */
-    addStrategy(strategy: TabStopJumpStrategy): void {
-        this.strategies.push(strategy);
+        return undefined;
     }
 }
 

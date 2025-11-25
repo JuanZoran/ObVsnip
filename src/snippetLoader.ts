@@ -3,6 +3,7 @@ import { ParsedSnippet } from "./types";
 import { SnippetParser } from "./snippetParser";
 import { PluginLogger } from "./logger";
 import { getMonotonicTime } from "./telemetry";
+import { getErrorMessage } from "./utils/errorUtils";
 
 /**
  * Handles loading and managing snippet files
@@ -44,7 +45,7 @@ export class SnippetLoader {
 			try {
 				snippets = SnippetParser.parseJson(content, this.logger);
 			} catch (error) {
-				const message = error instanceof Error ? error.message : String(error);
+				const message = getErrorMessage(error);
 				console.error(message);
 				new Notice(`Error: ${message}`, 5000);
 				return [];
@@ -54,7 +55,7 @@ export class SnippetLoader {
 
 			return snippets;
 		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error);
+			const message = getErrorMessage(error);
 			console.error('Failed to load snippets:', error);
 			new Notice(`Error: Failed to load snippets. ${message}`, 5000);
 			return [];

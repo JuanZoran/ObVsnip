@@ -15,6 +15,7 @@ import { SnippetEngine } from "./src/snippetEngine";
 import {
 	snippetSessionExtensions,
 	setSnippetWidgetConfig,
+	setDebugRealtimeSync,
 } from "./src/snippetSession";
 import { SnippetManager } from "./src/snippetManager";
 import { PluginLogger } from "./src/logger";
@@ -58,6 +59,7 @@ export default class TextSnippetsPlugin extends Plugin {
 			this.logger,
 			{
 				onSnippetApplied: (snippet) => this.recordSnippetUsage(snippet),
+				getSettings: () => this.settings,
 			}
 		);
 
@@ -404,6 +406,8 @@ export default class TextSnippetsPlugin extends Plugin {
 			choiceActiveColor: this.settings.choiceHighlightColor,
 			choiceInactiveColor: this.settings.choiceInactiveColor,
 		});
+		// Set debug mode for reference realtime sync based on enableDebugLogs
+		setDebugRealtimeSync(this.settings.enableDebugLogs);
 		this.reconfigureTriggerKeymap();
 	}
 

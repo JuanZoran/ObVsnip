@@ -1,6 +1,7 @@
 import { VscodeSnippet, ParsedSnippet } from './types';
 import { PluginLogger } from './logger';
 import { processSnippetBody } from './snippetBody';
+import { getErrorMessage } from './utils/errorUtils';
 
 /**
  * Parser for VSCode-style snippet JSON
@@ -34,8 +35,7 @@ export class SnippetParser {
 
 			return snippets;
 		} catch (error) {
-			const message =
-				error instanceof Error ? error.message : String(error);
+			const message = getErrorMessage(error);
 			console.error('Failed to parse snippet JSON:', error);
 			throw new Error(`Failed to parse snippet JSON: ${message}`);
 		}

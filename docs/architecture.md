@@ -326,8 +326,10 @@ interface TabStopJumpStrategy {
 
 **策略选择器**：
 - `TabStopJumpStrategySelector`：根据 stop 类型选择适当的跳转策略
-- 当前阶段：所有 stop 使用 `StandardJumpStrategy`
-- 未来扩展：支持引用 snippet（`ReferenceJumpStrategy`）和函数 snippet（`FunctionJumpStrategy`）
+- 已实现策略：
+  - `StandardJumpStrategy`：标准跳转策略（默认，匹配所有 stop）
+  - `ReferenceJumpStrategy`：引用类型 stop 的跳转策略（已实现）
+- 未来扩展：支持函数 snippet（`FunctionJumpStrategy`，管道语法）
 
 **设计特点**：
 - 职责分离：跳转逻辑独立于占位符行为
@@ -1033,9 +1035,12 @@ placeholderStrategy.onStopFocused?.(editor, stop);
 - TabStop 的 start/end 位置包含默认文本，聚焦时默认文本已被选中
 - 使用 `StandardPlaceholderStrategy`，因为默认文本已作为初始内容，无需特殊处理
 
+**已实现策略**：
+- `StandardJumpStrategy`：标准跳转（所有 stop 的默认策略）
+- `ReferenceJumpStrategy`：引用类型 stop 的跳转（已实现，支持多位置同步）
+
 **未来扩展**：
-- `ReferenceJumpStrategy`：引用 snippet（同一 $1 多处）
-- `FunctionJumpStrategy`：函数 snippet（管道语法）
+- `FunctionJumpStrategy`：函数 snippet（管道语法，如 `${1|>upcase|>regex}`）
 - 如果需要区分默认值和用户输入，可添加 `DefaultValuePlaceholderStrategy`
 
 ### 4. CodeMirror 扩展机制

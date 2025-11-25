@@ -1,0 +1,322 @@
+{
+  "basic-placeholder": {
+    "prefix": "ph",
+    "body": "Hello $1, welcome to $2!",
+    "description": "基本占位符示例"
+  },
+  
+  "default-value": {
+    "prefix": "def",
+    "body": "function ${1:myFunction}(${2:param}) { return ${3:value}; }",
+    "description": "带默认值的占位符"
+  },
+  
+  "choice-list": {
+    "prefix": "choice",
+    "body": "const type: ${1|string,number,boolean|} = ${2:value};",
+    "description": "选择列表示例"
+  },
+  
+  "multiple-choices": {
+    "prefix": "mchoice",
+    "body": "export ${1|const,let,var|} ${2:name} = ${3|true,false,0,\"\"|};",
+    "description": "多个选择列表"
+  },
+  
+  "variables": {
+    "prefix": "var",
+    "body": [
+      "File: ${TM_FILENAME}",
+      "Path: ${TM_FILEPATH}",
+      "Folder: ${TM_FOLDER}",
+      "Vault: ${VAULT_NAME}",
+      "Date: ${CURRENT_DATE}",
+      "Time: ${TIME_FORMATTED}"
+    ],
+    "description": "使用变量的示例"
+  },
+  
+  "variable-default": {
+    "prefix": "vardef",
+    "body": "Author: ${TM_FILENAME:Unknown} | Year: ${CURRENT_YEAR:2024}",
+    "description": "变量带默认值"
+  },
+  
+  "reference-function": {
+    "prefix": "ref",
+    "body": "function $1($1) { return $1; }",
+    "description": "引用 Snippet - 函数名在三处同步"
+  },
+  
+  "reference-var": {
+    "prefix": "refvar",
+    "body": "const $1 = ${2:value}; const $1 = ${2:value};",
+    "description": "引用 Snippet - 变量名和值在多处同步"
+  },
+  
+  "reference-choice": {
+    "prefix": "refchoice",
+    "body": "type $1 = ${1|string,number,boolean|}; const x: $1;",
+    "description": "引用 Snippet 与选择列表结合"
+  },
+  
+  "nested": {
+    "prefix": "nest",
+    "body": "function ${1:outer ${2:inner}}() {}",
+    "description": "嵌套占位符示例"
+  },
+  
+  "escape": {
+    "prefix": "esc",
+    "body": "Price: $$100, Path: \\\\server\\\\share",
+    "description": "转义字符示例"
+  },
+  
+  "multiline": {
+    "prefix": "ml",
+    "body": [
+      "function ${1:name}(${2:params}) {",
+      "  ${3:// code}",
+      "  return ${4:value};",
+      "}"
+    ],
+    "description": "多行函数模板"
+  },
+  
+  "markdown-note": {
+    "prefix": "note",
+    "body": [
+      "> [!note]",
+      "> ${1:内容}",
+      "",
+      "创建时间: ${CURRENT_DATE} ${TIME_FORMATTED}",
+      "文件: ${TM_FILENAME}"
+    ],
+    "description": "Markdown 备注模板"
+  },
+  
+  "hidden": {
+    "prefix": "hide",
+    "body": "This snippet is hidden from the menu",
+    "description": "隐藏的片段（不出现在菜单中）",
+    "hide": true
+  },
+  
+  "high-priority": {
+    "prefix": "hp",
+    "body": "High priority snippet",
+    "description": "高优先级片段",
+    "priority": 100
+  },
+  
+  "low-priority": {
+    "prefix": "lp",
+    "body": "Low priority snippet",
+    "description": "低优先级片段",
+    "priority": 1
+  },
+  
+  "complete-example": {
+    "prefix": "complete",
+    "body": [
+      "// File: ${TM_FILENAME}",
+      "// Created: ${CURRENT_DATE} ${TIME_FORMATTED}",
+      "",
+      "export ${1|class,interface,type|} ${2:MyClass} {",
+      "  ${3:property}: ${4|string,number,boolean|};",
+      "",
+      "  constructor(${5:params}) {",
+      "    ${6:// initialization}",
+      "  }",
+      "",
+      "  ${7:method}(): ${8:returnType} {",
+      "    return ${9:value};",
+      "  }",
+      "}"
+    ],
+    "description": "完整的 TypeScript 类模板示例"
+  },
+  
+  "reference-sync-example": {
+    "prefix": "sync",
+    "body": "const $1 = $2; const $1 = $2; const $1 = $2;",
+    "description": "引用同步示例 - 变量名和值在三处同步"
+  },
+  
+  "choice-with-default": {
+    "prefix": "cdef",
+    "body": "const ${1:name}: ${2|string,number|} = ${3:defaultValue};",
+    "description": "选择列表与默认值结合"
+  },
+  
+  "nested-complex": {
+    "prefix": "ncomp",
+    "body": "function ${1:outer ${2:middle ${3:inner}}}() {}",
+    "description": "多层嵌套占位符"
+  },
+  
+  "variable-template": {
+    "prefix": "template",
+    "body": [
+      "---",
+      "title: ${1:Title}",
+      "date: ${CURRENT_DATE}",
+      "author: ${VAULT_NAME}",
+      "tags: ${2:tag1, tag2}",
+      "---",
+      "",
+      "${3:Content}"
+    ],
+    "description": "使用变量的模板"
+  },
+  
+  "typescript-function": {
+    "prefix": "tsfunc",
+    "body": [
+      "/**",
+      " * ${1:Description}",
+      " * @param ${2:param} - ${3:param description}",
+      " * @returns ${4:return description}",
+      " */",
+      "function ${5:functionName}(${6:params}): ${7|void,string,number,boolean|} {",
+      "  ${8:// implementation}",
+      "  return ${9:value};",
+      "}"
+    ],
+    "description": "TypeScript 函数模板（带 JSDoc）"
+  },
+  
+  "react-component": {
+    "prefix": "react",
+    "body": [
+      "import React from 'react';",
+      "",
+      "interface ${1:ComponentName}Props {",
+      "  ${2:// props}",
+      "}",
+      "",
+      "const ${1:ComponentName}: React.FC<${1:ComponentName}Props> = (${3:props}) => {",
+      "  return (",
+      "    <div>",
+      "      ${4:// content}",
+      "    </div>",
+      "  );",
+      "};",
+      "",
+      "export default ${1:ComponentName};"
+    ],
+    "description": "React 组件模板（引用同步）"
+  },
+  
+  "python-function": {
+    "prefix": "pyfunc",
+    "body": [
+      "def ${1:function_name}(${2:params}):",
+      "    \"\"\"",
+      "    ${3:Description}",
+      "    ",
+      "    Args:",
+      "        ${2:params}: ${4:param description}",
+      "    ",
+      "    Returns:",
+      "        ${5:return description}",
+      "    \"\"\"",
+      "    ${6:# implementation}",
+      "    return ${7:value}"
+    ],
+    "description": "Python 函数模板（带文档字符串）"
+  },
+  
+  "sql-query": {
+    "prefix": "sql",
+    "body": [
+      "SELECT ${1|*,column1,column2|}",
+      "FROM ${2:table_name}",
+      "WHERE ${3:condition}",
+      "${4|ORDER BY,GROUP BY|} ${5:column}",
+      "${6|LIMIT,OFFSET|} ${7:value};"
+    ],
+    "description": "SQL 查询模板"
+  },
+  
+  "html-tag": {
+    "prefix": "html",
+    "body": "<${1|div,span,p,section|} ${2:class=\"${3:className}\"}>${4:content}</${1|div,span,p,section|}>",
+    "description": "HTML 标签模板（引用同步）"
+  },
+  
+  "css-class": {
+    "prefix": "css",
+    "body": [
+      ".${1:className} {",
+      "  ${2:property}: ${3:value};",
+      "}"
+    ],
+    "description": "CSS 类定义模板"
+  },
+  
+  "markdown-link": {
+    "prefix": "mdlink",
+    "body": "[${1:link text}](${2:url})",
+    "description": "Markdown 链接"
+  },
+  
+  "markdown-image": {
+    "prefix": "mdimg",
+    "body": "![${1:alt text}](${2:image-url})",
+    "description": "Markdown 图片"
+  },
+  
+  "markdown-table": {
+    "prefix": "mdtable",
+    "body": [
+      "| ${1:Header 1} | ${2:Header 2} | ${3:Header 3} |",
+      "| --- | --- | --- |",
+      "| ${4:Cell 1} | ${5:Cell 2} | ${6:Cell 3} |"
+    ],
+    "description": "Markdown 表格模板"
+  },
+  
+  "obsidian-callout": {
+    "prefix": "callout",
+    "body": [
+      "> [!${1|note,tip,warning,important,caution|}]",
+      "> ${2:Content}"
+    ],
+    "description": "Obsidian 提示框"
+  },
+  
+  "obsidian-tag": {
+    "prefix": "tag",
+    "body": "#${1:tag-name}",
+    "description": "Obsidian 标签"
+  },
+  
+  "obsidian-wikilink": {
+    "prefix": "wiki",
+    "body": "[[${1:page-name}|${2:display text}]]",
+    "description": "Obsidian 内部链接"
+  },
+  
+  "date-time-stamp": {
+    "prefix": "dt",
+    "body": "${CURRENT_YEAR}-${CURRENT_MONTH}-${CURRENT_DATE} ${CURRENT_HOUR}:${CURRENT_MINUTE}:${CURRENT_SECOND}",
+    "description": "日期时间戳"
+  },
+  
+  "file-header": {
+    "prefix": "header",
+    "body": [
+      "/**",
+      " * @file ${TM_FILENAME}",
+      " * @path ${TM_FILEPATH}",
+      " * @folder ${TM_FOLDER}",
+      " * @vault ${VAULT_NAME}",
+      " * @date ${CURRENT_DATE}",
+      " * @time ${TIME_FORMATTED}",
+      " */"
+    ],
+    "description": "文件头注释模板"
+  }
+}
+

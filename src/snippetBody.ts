@@ -28,10 +28,24 @@ export const processSnippetBody = (body: string, logger?: PluginLogger): Process
 	const parser = new SnippetBodyParser(body);
 	const parsed = parser.parse();
 
-	const stopsMap: Map<number, TabStopInfo> = new Map();
+	// 收集同一 index 的所有位置
+	const stopsMap: Map<number, TabStopInfo[]> = new Map();
 	for (const stop of parsed.placeholders) {
-		stopsMap.set(stop.index, stop);
-		if (stop.choices && stop.choices.length > 0) {
+		const stopInfo: TabStopInfo = {
+			index: stop.index,
+			start: stop.start,
+			end: stop.end,
+			choices: stop.choices,
+		};
+		
+		const existing = stopsMap.get(stop.index);
+		if (existing) {
+			existing.push(stopInfo);
+		} else {
+			stopsMap.set(stop.index, [stopInfo]);
+		}
+		
+		if (stop.choices?.length) {
 			logger?.debug(
 				"parser",
 				`    → Tab stop $${stop.index} choices: [${stop.choices.join(", ")}]`
@@ -39,26 +53,57 @@ export const processSnippetBody = (body: string, logger?: PluginLogger): Process
 		}
 	}
 
+	// 处理隐式 $0
 	if (!stopsMap.has(0)) {
-		stopsMap.set(0, {
+		stopsMap.set(0, [{
 			index: 0,
 			start: parsed.text.length,
 			end: parsed.text.length,
-		});
+		}]);
 		logger?.debug("parser", `    → Added implicit $0 at position ${parsed.text.length}`);
 	}
 
+	// 识别引用类型并生成 referenceGroup
+	const tabStops: TabStopInfo[] = [];
+	let referenceGroupCounter = 0;
+	
+	for (const [index, stops] of stopsMap.entries()) {
+		if (stops.length > 1) {
+			// 多个位置，标记为引用类型
+			const referenceGroup = `ref_${referenceGroupCounter++}`;
+			for (const stop of stops) {
+				tabStops.push({
+					...stop,
+					type: 'reference',
+					referenceGroup,
+				});
+			}
+			logger?.debug("parser", `    → Tab stop $${index} has ${stops.length} positions (reference type, group: ${referenceGroup})`);
+		} else {
+			// 单个位置，标准类型
+			tabStops.push({
+				...stops[0],
+				type: 'standard',
+			});
+		}
+	}
+
+	// 按 index 和 start 位置排序
+	tabStops.sort((a, b) => {
+		if (a.index !== b.index) return a.index - b.index;
+		return a.start - b.start;
+	});
+
 	logger?.debug("parser", `\n✅ Final text: "${parsed.text}"`);
 	logger?.debug("parser", `   Length: ${parsed.text.length}`);
-
-	const tabStops = Array.from(stopsMap.values()).sort((a, b) => a.index - b.index);
 	logger?.debug("parser", `📍 Tab stops:`);
 	tabStops.forEach(stop => {
 		const choiceInfo =
 			stop.choices && stop.choices.length > 0
 				? ` choices=[${stop.choices.join(', ')}]`
 				: '';
-		logger?.debug("parser", `   $${stop.index}: start=${stop.start}, end=${stop.end}${choiceInfo}`);
+		const typeInfo = stop.type === 'reference' ? ` type=reference group=${stop.referenceGroup}` : '';
+		logger?.debug("parser", `   $${stop.index}: start=${stop.start}, end=${stop.end}${choiceInfo}${typeInfo}`);
 	});
 
 	const variables: SnippetVariableInfo[] = parsed.variables.map(variable => ({

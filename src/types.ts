@@ -51,6 +51,8 @@ export interface TabStopInfo {
 	start: number;      // Start position in line
 	end: number;        // End position in line (for range)
 	choices?: string[]; // Optional choice list for ${1|a,b|}
+	type?: 'standard' | 'reference' | 'function';  // stop 类型
+	referenceGroup?: string;  // 引用组标识(相同 index 的 stops 共享)
 }
 
 export interface SnippetVariableInfo {
@@ -92,6 +94,8 @@ export interface PluginSettings {
 	ghostTextColor: string;
 	virtualTextPresets: VirtualTextColorPreset[];
 	selectedVirtualTextPresetName: string;
+	referenceSnippetEnabled: boolean;  // 是否启用引用 snippet
+	referenceSyncMode: 'realtime' | 'on-jump';  // 同步模式
 }
 
 export interface VirtualTextColorPreset {

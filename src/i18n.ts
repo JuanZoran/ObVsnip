@@ -140,6 +140,14 @@ export interface LocaleStrings {
 		snippetFilesAddButton: string;
 		snippetFilesReloadButton: string;
 		snippetFilesRemoveButton: string;
+		referenceSection: string;
+		referenceSectionDesc: string;
+		referenceEnabledName: string;
+		referenceEnabledDesc: string;
+		referenceSyncModeName: string;
+		referenceSyncModeDesc: string;
+		referenceSyncModeRealtime: string;
+		referenceSyncModeOnJump: string;
 	};
 }
 
@@ -267,6 +275,14 @@ const translations: Record<LocaleKey, LocaleStrings> = {
 			snippetFilesAddButton: "Add file",
 			snippetFilesReloadButton: "Reload snippets",
 			snippetFilesRemoveButton: "Remove",
+			referenceSection: "Reference Snippet",
+			referenceSectionDesc: "Enable reference snippets to allow the same tab stop index (e.g., $1) to appear in multiple positions. When you edit one position, other positions can sync automatically.",
+			referenceEnabledName: "Enable Reference Snippets",
+			referenceEnabledDesc: "Allow the same tab stop index to appear in multiple positions",
+			referenceSyncModeName: "Sync Mode",
+			referenceSyncModeDesc: "Choose when to sync reference stops: 'realtime' syncs while editing, 'on-jump' syncs when jumping to next tab stop",
+			referenceSyncModeRealtime: "Realtime (sync while editing)",
+			referenceSyncModeOnJump: "On Jump (sync when jumping)",
 		},
 	},
 	zh: {
@@ -385,6 +401,14 @@ const translations: Record<LocaleKey, LocaleStrings> = {
 			snippetFilesAddButton: "添加文件",
 			snippetFilesReloadButton: "重新加载片段",
 			snippetFilesRemoveButton: "删除",
+			referenceSection: "引用 Snippet",
+			referenceSectionDesc: "启用引用片段功能，允许同一个占位符索引（如 $1）在多个位置出现。当您编辑其中一个位置时，其他位置可以自动同步。",
+			referenceEnabledName: "启用引用片段",
+			referenceEnabledDesc: "允许同一个占位符索引在多个位置出现",
+			referenceSyncModeName: "同步模式",
+			referenceSyncModeDesc: "选择何时同步引用占位符：'实时'模式在编辑时同步，'跳转'模式在跳转到下一个占位符时同步",
+			referenceSyncModeRealtime: "实时（编辑时同步）",
+			referenceSyncModeOnJump: "跳转（跳转时同步）",
 		},
 	},
 };

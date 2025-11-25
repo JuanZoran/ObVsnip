@@ -1,10 +1,18 @@
-import { EditorState, type TransactionSpec } from '@codemirror/state';
-import { snippetSessionField } from '../../src/snippetSession';
+import { EditorState, Transaction, type TransactionSpec } from '@codemirror/state';
+import {
+	snippetSessionField,
+	getRealtimeSyncCallback,
+	pushSnippetSessionEffect,
+	popSnippetSessionEffect,
+	replaceSnippetSessionEffect,
+	clearSnippetSessionsEffect,
+} from '../../src/snippetSession';
 
 export class MockEditor {
 	private text: string[];
 	private cursor = { line: 0, ch: 0 };
 	private selection: { anchor: { line: number; ch: number }; head: { line: number; ch: number } };
+	private boundView?: MockEditorView;
 
 	constructor(initialText = '') {
 		this.text = initialText.split('\n');
@@ -41,6 +49,17 @@ export class MockEditor {
 	replaceRange(text: string, from: { line: number; ch: number }, to: { line: number; ch: number }): void {
 		const start = this.posToOffset(from);
 		const end = this.posToOffset(to);
+
+		// If linked to a view, dispatch the change through the view to keep state in sync
+		if (this.boundView) {
+			const cursorOffset = start + text.length;
+			this.boundView.dispatch({
+				changes: { from: start, to: end, insert: text },
+				selection: { anchor: cursorOffset, head: cursorOffset },
+			});
+			return;
+		}
+
 		const current = this.getText();
 		const next = current.slice(0, start) + text + current.slice(end);
 		this.text = next.split('\n');
@@ -78,19 +97,75 @@ export class MockEditor {
 	getText(): string {
 		return this.text.join('\n');
 	}
+
+	setTextFromView(docText: string, selectionFrom: number, selectionTo: number): void {
+		this.text = docText.split('\n');
+		const anchor = this.offsetToPos(selectionFrom);
+		const head = this.offsetToPos(selectionTo);
+		this.setSelection(anchor, head);
+	}
+
+	bindView(view: MockEditorView): void {
+		this.boundView = view;
+	}
 }
 
 export class MockEditorView {
 	state: EditorState;
+	private boundEditor?: MockEditor;
 
-	constructor(initialText = '') {
+	constructor(initialText = '', boundEditor?: MockEditor) {
+		this.boundEditor = boundEditor;
+		if (boundEditor) {
+			boundEditor.bindView(this);
+		}
 		this.state = EditorState.create({
 			doc: initialText,
 			extensions: [snippetSessionField],
 		});
 	}
 
+	bindEditor(editor: MockEditor): void {
+		this.boundEditor = editor;
+		editor.bindView(this);
+	}
+
 	dispatch(spec: TransactionSpec): void {
-		this.state = this.state.update(spec).state;
+		const tr = this.state.update(spec);
+		this.state = tr.state;
+
+		// In Obsidian, view.dispatch updates the editor document automatically.
+		// Mirror that behavior in tests when a bound editor exists.
+		if (this.boundEditor && tr.docChanged) {
+			const docText = this.state.doc.toString();
+			const selection = this.state.selection.main;
+			this.boundEditor.setTextFromView(docText, selection.from, selection.to);
+		}
+
+		// Simulate realtime sync trigger from the view plugin
+		if (tr.docChanged) {
+			const callback = getRealtimeSyncCallback();
+			const isSnippetSync = tr.annotation(Transaction.userEvent) === 'snippet-sync';
+			const sessionChangedByEffect = tr.effects.some(effect =>
+				effect.is(pushSnippetSessionEffect) ||
+				effect.is(popSnippetSessionEffect) ||
+				effect.is(replaceSnippetSessionEffect) ||
+				effect.is(clearSnippetSessionsEffect)
+			);
+
+			if (callback && !sessionChangedByEffect && !isSnippetSync) {
+				const stack = this.state.field(snippetSessionField);
+				if (stack && stack.length > 0) {
+					const session = stack[stack.length - 1];
+					const currentStop = session.stops.find(
+						stop => stop.index === session.currentIndex
+					);
+
+					if (currentStop) {
+						callback(this as any, session, currentStop);
+					}
+				}
+			}
+		}
 	}
 }

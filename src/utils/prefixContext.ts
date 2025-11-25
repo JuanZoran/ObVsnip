@@ -1,5 +1,6 @@
 import type { Editor } from "obsidian";
 import type { PrefixInfo } from "../types";
+import { posToOffset, offsetToPos } from "./positionUtils";
 
 export interface PrefixContextOptions {
 	editor: Editor;
@@ -21,9 +22,9 @@ export const getContextBeforeCursor = (
 	}
 
 	const cursor = editor.getCursor();
-	const endOffset = editor.posToOffset(cursor);
+	const endOffset = posToOffset(editor, cursor);
 	const startOffset = Math.max(0, endOffset - prefixInfo.maxLength);
-	const from = editor.offsetToPos(startOffset);
+	const from = offsetToPos(editor, startOffset);
 	const text = editor.getRange(from, cursor);
 
 	return {

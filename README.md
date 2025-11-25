@@ -34,6 +34,8 @@
 
 ## Snippet 文件
 
+### 快速开始
+
 示例（`snippets.json`）：
 
 ```json
@@ -51,6 +53,22 @@
 	}
 }
 ```
+
+### 完整示例文档
+
+📖 **查看 [Snippet 功能示例文档](./docs/snippet-examples.md)** 了解所有支持的功能，包括：
+
+- 基本占位符 (`$1`, `$2`)
+- 默认值占位符 (`${1:default}`)
+- 选择列表 (`${1|a,b,c|}`)
+- 内置变量 (`${TM_FILENAME}`, `${CURRENT_YEAR}` 等)
+- **引用 Snippet**（多位置同步）- 新功能！
+- 嵌套占位符
+- 转义字符
+- 多行 body
+- 隐藏片段和优先级设置
+
+💾 **直接使用**: 复制 [snippets-examples.json](./docs/snippets-examples.json) 到你的仓库，在设置中添加该文件即可开始测试所有功能。
 
 ## 调试模式
 

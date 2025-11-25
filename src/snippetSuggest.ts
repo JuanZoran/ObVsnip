@@ -12,10 +12,13 @@ import { SnippetManager } from "./snippetManager";
 
 import { PluginLogger } from "./logger";
 
-import { getActiveEditor, getEditorView } from "./utils/editorUtils";
+import { getActiveEditor, getCursorCoords } from "./utils/editorUtils";
 import { getContextBeforeCursor } from "./utils/prefixContext";
+import { offsetToPos, posToOffset } from "./utils/positionUtils";
 import { getMonotonicTime } from "./telemetry";
 import { getSnippetWidgetConfig } from "./snippetSession";
+import { applySnippetStyles } from "./utils/styleUtils";
+import { renderChoiceList } from "./utils/choiceUtils";
 
 interface SnippetMenuOptions {
 	getSnippets: () => ParsedSnippet[];
@@ -67,17 +70,8 @@ export const formatSnippetPreview = (snippet: ParsedSnippet): DocumentFragment =
 		if (stop.choices && stop.choices.length > 0) {
 			const choiceContainer = document.createElement("span");
 			choiceContainer.className = "preview-choice-list";
-			stop.choices.forEach((choice, idx) => {
-				const choiceEntry = document.createElement("span");
-				choiceEntry.className = "snippet-choice-entry";
-				if (idx === 0) {
-					choiceEntry.classList.add("snippet-choice-entry-active");
-				}
-				choiceEntry.textContent = choice;
-				choiceContainer.appendChild(choiceEntry);
-				if (idx < stop.choices!.length - 1) {
-					choiceContainer.appendChild(document.createTextNode("/"));
-				}
+			renderChoiceList(choiceContainer, stop.choices, {
+				activeIndex: 0,
 			});
 			fragment.appendChild(choiceContainer);
 		}
@@ -98,23 +92,7 @@ export const formatSnippetPreview = (snippet: ParsedSnippet): DocumentFragment =
 
 const applyPreviewStyles = (el: HTMLElement): void => {
 	const config = getSnippetWidgetConfig();
-	const styleParts: string[] = [];
-	if (config.placeholderColor) {
-		styleParts.push(`--snippet-placeholder-color:${config.placeholderColor}`);
-	}
-	if (config.placeholderActiveColor) {
-		styleParts.push(`--snippet-placeholder-active-color:${config.placeholderActiveColor}`);
-	}
-	if (config.ghostTextColor) {
-		styleParts.push(`--snippet-ghost-text-color:${config.ghostTextColor}`);
-	}
-	if (config.choiceActiveColor) {
-		styleParts.push(`--snippet-choice-active-color:${config.choiceActiveColor}`);
-	}
-	if (config.choiceInactiveColor) {
-		styleParts.push(`--snippet-choice-inactive-color:${config.choiceInactiveColor}`);
-	}
-	el.style.cssText = styleParts.join(";");
+	applySnippetStyles(el, config);
 };
 
 export class SnippetCompletionMenu {
@@ -207,7 +185,7 @@ export class SnippetCompletionMenu {
 			return false;
 		}
 
-		const coords = this.getCursorCoords(targetEditor);
+		const coords = getCursorCoords(targetEditor);
 		this.anchorCoords = coords;
 
 		this.render(coords);
@@ -581,31 +559,6 @@ export class SnippetCompletionMenu {
 		this.close();
 	}
 
-	private getCursorCoords(editor: Editor): { top: number; left: number } {
-		const cursor = editor.getCursor();
-
-		const editorView = getEditorView(editor);
-
-		if (editorView) {
-			const offset = editor.posToOffset(cursor);
-
-			const coords = editorView.coordsAtPos(offset);
-
-			if (coords) {
-				return { top: coords.bottom + 4, left: coords.left };
-			}
-		}
-
-		const line = editor.getLine(cursor.line) ?? "";
-
-		const charWidth = 8;
-
-		const top = cursor.line * 20 + 40;
-
-		const left = line.length * charWidth + 40;
-
-		return { top, left };
-	}
 
 	private resolveQueryContext(
 		editor: Editor
@@ -622,7 +575,7 @@ export class SnippetCompletionMenu {
 		});
 		if (!context) return null;
 		const cursor = editor.getCursor();
-		let from = editor.offsetToPos(context.startOffset);
+		let from = offsetToPos(editor, context.startOffset);
 		const span = context.endOffset - context.startOffset;
 		const windowLimited =
 			span >= prefixInfo.maxLength && prefixInfo.maxLength > 0;
@@ -758,7 +711,7 @@ export class SnippetCompletionMenu {
 
 	private handleReposition(): void {
 		if (!this.currentEditor) return;
-		const coords = this.getCursorCoords(this.currentEditor);
+		const coords = getCursorCoords(this.currentEditor);
 		this.anchorCoords = coords;
 		this.positionContainer(coords);
 	}
@@ -838,8 +791,8 @@ export class SnippetCompletionMenu {
 	): { from: EditorPosition; to: EditorPosition } | null {
 		if (!this.queryAnchorPos) return null;
 		const cursor = editor.getCursor();
-		const anchorOffset = editor.posToOffset(this.queryAnchorPos);
-		const cursorOffset = editor.posToOffset(cursor);
+		const anchorOffset = posToOffset(editor, this.queryAnchorPos);
+		const cursorOffset = posToOffset(editor, cursor);
 		if (cursorOffset < anchorOffset) {
 			return null;
 		}

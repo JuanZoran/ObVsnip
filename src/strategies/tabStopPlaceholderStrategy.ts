@@ -1,6 +1,8 @@
 import type { Editor } from "obsidian";
 import type { SnippetSessionStop } from "../snippetSession";
 import type { PluginSettings } from "../types";
+import { StrategySelector } from "./strategySelector";
+import { offsetToPos, posToOffset } from "../utils/positionUtils";
 
 /**
  * Strategy interface for tab stop placeholder behavior
@@ -98,8 +100,8 @@ export class ChoicePlaceholderStrategy implements TabStopPlaceholderStrategy {
             return false;
         }
 
-        const from = editor.offsetToPos(stop.start);
-        const to = editor.offsetToPos(stop.end);
+        const from = offsetToPos(editor, stop.start);
+        const to = offsetToPos(editor, stop.end);
         const currentText = editor.getRange(from, to);
         const len = stop.choices.length;
         const currentIndex = stop.choices.findIndex(choice => choice === currentText);
@@ -108,9 +110,9 @@ export class ChoicePlaceholderStrategy implements TabStopPlaceholderStrategy {
 
         editor.replaceRange(nextValue, from, to);
 
-        const startOffset = editor.posToOffset(from);
+        const startOffset = posToOffset(editor, from);
         const newEndOffset = startOffset + nextValue.length;
-        const newEndPos = editor.offsetToPos(newEndOffset);
+        const newEndPos = offsetToPos(editor, newEndOffset);
 
         editor.setSelection(from, newEndPos);
 
@@ -126,41 +128,24 @@ export class ChoicePlaceholderStrategy implements TabStopPlaceholderStrategy {
 /**
  * Selector for choosing the appropriate placeholder strategy
  */
-export class TabStopPlaceholderStrategySelector {
-    private strategies: TabStopPlaceholderStrategy[];
-    private defaultStrategy: TabStopPlaceholderStrategy;
-
+export class TabStopPlaceholderStrategySelector extends StrategySelector<TabStopPlaceholderStrategy> {
     constructor() {
-        this.defaultStrategy = new StandardPlaceholderStrategy();
+        const defaultStrategy = new StandardPlaceholderStrategy();
         // Order matters: more specific strategies should come first
-        this.strategies = [
+        super(defaultStrategy, [
             new ChoicePlaceholderStrategy(),
-            this.defaultStrategy, // Fallback
-        ];
+            defaultStrategy, // Fallback
+        ]);
     }
 
-    /**
-     * Get the appropriate placeholder strategy for a given stop
-     * @param stop The tab stop to get strategy for
-     * @param settings Plugin settings (for future use)
-     * @returns The matching strategy, or default if none match
-     */
-    getStrategy(stop: SnippetSessionStop, settings?: PluginSettings): TabStopPlaceholderStrategy {
-        // Match by specificity: choice > default > standard
-        for (const strategy of this.strategies) {
-            if (strategy.matches(stop)) {
-                return strategy;
-            }
-        }
-        return this.defaultStrategy;
-    }
+    // Uses base class getStrategy implementation - no custom logic needed
 
     /**
      * Add a new strategy to the selector
      * @param strategy The strategy to add
      */
     addStrategy(strategy: TabStopPlaceholderStrategy): void {
-        this.strategies.unshift(strategy); // Add to front for higher priority
+        super.addStrategy(strategy, true); // Add to front for higher priority
     }
 }
 

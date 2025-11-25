@@ -87,6 +87,8 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	ghostTextColor: DEFAULT_COLOR_SCHEME.ghostTextColor,
 	virtualTextPresets: [],
 	selectedVirtualTextPresetName: "",
+	referenceSnippetEnabled: true,
+	referenceSyncMode: 'realtime',
 };
 
 export const ensurePluginSettings = (
