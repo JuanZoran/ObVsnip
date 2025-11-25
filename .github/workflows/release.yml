@@ -63,53 +63,54 @@ jobs:
       
       - name: Create GitHub Release
         id: create_release
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const tagName = '${{ steps.tag.outputs.tag }}';
-            const version = '${{ steps.package-version.outputs.version }}';
-            const releaseNotes = `Release ${version}
-            
-            ## Installation
-            1. Download the zip file or individual files
-            2. Extract to your Obsidian vault's \`.obsidian/plugins/obvsnip/\` directory
-            3. Restart Obsidian`;
-            
-            // Check if release already exists
-            try {
-              const existingRelease = await github.rest.repos.getReleaseByTag({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                tag: tagName
-              });
-              console.log('Release already exists, deleting...');
-              await github.rest.repos.deleteRelease({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                release_id: existingRelease.data.id
-              });
-            } catch (error) {
-              if (error.status !== 404) {
-                throw error;
-              }
-              console.log('Release does not exist, will create new one');
-            }
-            
-            // Create new release
-            const release = await github.rest.repos.createRelease({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              tag_name: tagName,
-              name: `Release ${version}`,
-              body: releaseNotes,
-              draft: false,
-              prerelease: false
-            });
-            
-            console.log(`Release created: ${release.data.upload_url}`);
-            core.setOutput('upload_url', release.data.upload_url);
-            core.setOutput('release_id', release.data.id);
+        run: |
+          # Use PAT if available, otherwise use GITHUB_TOKEN
+          TOKEN="${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}"
+          TAG_NAME="${{ steps.tag.outputs.tag }}"
+          VERSION="${{ steps.package-version.outputs.version }}"
+          OWNER="${{ github.repository_owner }}"
+          REPO="${{ github.event.repository.name }}"
+          
+          # Check if release already exists and delete it
+          EXISTING_RELEASE=$(curl -s -H "Authorization: token $TOKEN" \
+            "https://api.github.com/repos/$OWNER/$REPO/releases/tags/$TAG_NAME" | jq -r '.id // empty')
+          
+          if [ -n "$EXISTING_RELEASE" ] && [ "$EXISTING_RELEASE" != "null" ]; then
+            echo "Release already exists (ID: $EXISTING_RELEASE), deleting..."
+            curl -X DELETE -H "Authorization: token $TOKEN" \
+              "https://api.github.com/repos/$OWNER/$REPO/releases/$EXISTING_RELEASE"
+          fi
+          
+          # Create new release
+          RELEASE_RESPONSE=$(curl -s -X POST \
+            -H "Authorization: token $TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"tag_name\": \"$TAG_NAME\",
+              \"name\": \"Release $VERSION\",
+              \"body\": \"Release $VERSION\n\n## Installation\n1. Download the zip file or individual files\n2. Extract to your Obsidian vault's \`.obsidian/plugins/obvsnip/\` directory\n3. Restart Obsidian\",
+              \"draft\": false,
+              \"prerelease\": false
+            }" \
+            "https://api.github.com/repos/$OWNER/$REPO/releases")
+          
+          UPLOAD_URL=$(echo "$RELEASE_RESPONSE" | jq -r '.upload_url // empty')
+          RELEASE_ID=$(echo "$RELEASE_RESPONSE" | jq -r '.id // empty')
+          
+          if [ -z "$UPLOAD_URL" ] || [ "$UPLOAD_URL" = "null" ]; then
+            echo "Error creating release:"
+            echo "$RELEASE_RESPONSE" | jq '.'
+            exit 1
+          fi
+          
+          # Remove the {?name,label} suffix from upload_url
+          UPLOAD_URL="${UPLOAD_URL%\{*}"
+          
+          echo "upload_url=$UPLOAD_URL" >> $GITHUB_OUTPUT
+          echo "release_id=$RELEASE_ID" >> $GITHUB_OUTPUT
+          echo "Release created successfully (ID: $RELEASE_ID)"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
       - name: Upload zip file
         uses: actions/upload-release-asset@v1
