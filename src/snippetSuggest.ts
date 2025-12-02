@@ -6,6 +6,7 @@ import type {
 	PrefixInfo,
 	RankingAlgorithmId,
 	RankingAlgorithmSetting,
+	SnippetMenuKeymap,
 } from "./types";
 
 import { SnippetManager } from "./snippetManager";
@@ -31,6 +32,10 @@ interface SnippetMenuOptions {
 	getUsageCounts?: () => Map<string, number>;
 	getPrefixInfo?: () => PrefixInfo;
 	getRankingAlgorithmNames: () => Record<RankingAlgorithmId, string>;
+	getSources?: () => string[];
+	getCurrentSource?: () => string;
+	setCurrentSource?: (source: string) => void;
+	getMenuKeymap?: () => SnippetMenuKeymap;
 }
 
 const matchesFuzzy = (source: string, query: string): boolean => {
@@ -140,6 +145,7 @@ export class SnippetCompletionMenu {
 
 	private queryAnchorPos: EditorPosition | null = null;
 	private snippetMatchFields: Map<ParsedSnippet, string> = new Map();
+	private sourceLabelEl: HTMLElement | null = null;
 
 	constructor(private app: App, private options: SnippetMenuOptions) {
 		this.boundKeydown = this.handleKeydown.bind(this);
@@ -246,6 +252,18 @@ export class SnippetCompletionMenu {
 		return true;
 	}
 
+	private navigateSource(delta: number): void {
+		const sources = this.getSourceList();
+		if (!sources || sources.length <= 1) return;
+		const current = this.getCurrentSource();
+		const currentIndex = Math.max(0, sources.indexOf(current));
+		const nextIndex = (currentIndex + delta + sources.length) % sources.length;
+		const nextSource = sources[nextIndex];
+		this.options.setCurrentSource?.(nextSource);
+		this.updateSourceLabel();
+		this.refreshEntriesForSourceChange();
+	}
+
 	acceptCurrent(): boolean {
 		if (!this.isOpen()) return false;
 
@@ -255,7 +273,32 @@ export class SnippetCompletionMenu {
 	}
 
 	private getVisibleSnippets(): ParsedSnippet[] {
-		return this.options.getSnippets().filter((snippet) => !snippet.hide);
+		const snippets = this.options.getSnippets().filter((snippet) => !snippet.hide);
+		return this.filterBySource(snippets);
+	}
+
+	private getSourceList(): string[] {
+		return this.options.getSources?.() ?? ["all"];
+	}
+
+	private getCurrentSource(): string {
+		return this.options.getCurrentSource?.() ?? "all";
+	}
+
+	private getSourceLabel(source: string): string {
+		if (source === "all") return "All";
+		const parts = source.split("/");
+		return parts[parts.length - 1] || source;
+	}
+
+	private getCurrentSourceLabel(): string {
+		return this.getSourceLabel(this.getCurrentSource());
+	}
+
+	private filterBySource(snippets: ParsedSnippet[]): ParsedSnippet[] {
+		const source = this.getCurrentSource();
+		if (source === "all") return snippets;
+		return snippets.filter((snippet) => snippet.source === source);
 	}
 
 	/**
@@ -453,6 +496,10 @@ export class SnippetCompletionMenu {
 	private handleKeydown(event: KeyboardEvent): void {
 		if (!this.container || !this.currentEditor) return;
 
+		if (this.handleSourceKey(event)) {
+			return;
+		}
+
 		switch (event.key) {
 			case "ArrowDown":
 				event.preventDefault();
@@ -485,6 +532,21 @@ export class SnippetCompletionMenu {
 			default:
 				requestAnimationFrame(() => this.refreshEntries());
 		}
+	}
+
+	private handleSourceKey(event: KeyboardEvent): boolean {
+		const keymap = this.options.getMenuKeymap?.();
+		if (this.matchesBinding(event, keymap?.sourceNext, "n")) {
+			event.preventDefault();
+			this.navigateSource(1);
+			return true;
+		}
+		if (this.matchesBinding(event, keymap?.sourcePrev, "p")) {
+			event.preventDefault();
+			this.navigateSource(-1);
+			return true;
+		}
+		return false;
 	}
 
 	private handleClickOutside(event: MouseEvent): void {
@@ -526,6 +588,18 @@ export class SnippetCompletionMenu {
 
 			this.selectIndex(0);
 		}
+
+	private refreshEntriesForSourceChange(): void {
+		if (!this.listEl) return;
+		const hasEntries = this.updateEntriesForQuery(this.currentQuery);
+		this.populateList(this.listEl);
+		if (this.entries.length > 0) {
+			const targetIndex = Math.min(this.activeIndex, this.entries.length - 1);
+			this.selectIndex(Math.max(0, targetIndex));
+		} else if (!hasEntries) {
+			this.close();
+		}
+	}
 
 	private applySelection(index: number): void {
 		const snippet = this.entries[index];
@@ -861,6 +935,79 @@ export class SnippetCompletionMenu {
 		return 0;
 	}
 
+	private matchesBinding(
+		event: KeyboardEvent,
+		binding: string | undefined,
+		fallbackKey?: string
+	): boolean {
+		const parsed = this.parseKeyBinding(binding);
+		if (parsed && this.eventMatchesBinding(event, parsed)) {
+			return true;
+		}
+		if (
+			!binding &&
+			fallbackKey &&
+			(event.ctrlKey || event.metaKey) &&
+			!event.altKey &&
+			!event.shiftKey &&
+			event.key.toLowerCase() === fallbackKey
+		) {
+			return true;
+		}
+		return false;
+	}
+
+	private parseKeyBinding(binding?: string): {
+		key: string;
+		ctrl?: boolean;
+		meta?: boolean;
+		shift?: boolean;
+		alt?: boolean;
+		mod?: boolean;
+	} | null {
+		if (!binding) return null;
+		const parts = binding
+			.split(/[-+]/)
+			.map((part) => part.trim().toLowerCase())
+			.filter(Boolean);
+		if (parts.length === 0) return null;
+		const key = parts.pop() as string;
+		const modifiers: Record<string, boolean> = {};
+		for (const part of parts) {
+			if (part === "cmd" || part === "meta") modifiers.meta = true;
+			if (part === "ctrl" || part === "control") modifiers.ctrl = true;
+			if (part === "shift") modifiers.shift = true;
+			if (part === "alt" || part === "option") modifiers.alt = true;
+			if (part === "mod") modifiers.mod = true;
+		}
+		return { key, ...modifiers };
+	}
+
+	private eventMatchesBinding(
+		event: KeyboardEvent,
+		binding: {
+			key: string;
+			ctrl?: boolean;
+			meta?: boolean;
+			shift?: boolean;
+			alt?: boolean;
+			mod?: boolean;
+		}
+	): boolean {
+		const key = binding.key === "space" ? " " : binding.key;
+		if (event.key.toLowerCase() !== key.toLowerCase()) return false;
+
+		const hasMod = event.ctrlKey || event.metaKey;
+		if (binding.mod && !hasMod) return false;
+		if (!binding.mod && hasMod && !binding.ctrl && !binding.meta) return false;
+		if ((binding.ctrl ?? false) !== event.ctrlKey && !binding.mod) return false;
+		if ((binding.meta ?? false) !== event.metaKey && !binding.mod) return false;
+		if ((binding.shift ?? false) !== event.shiftKey) return false;
+		if ((binding.alt ?? false) !== event.altKey) return false;
+
+		return true;
+	}
+
 	private updateEntriesForQuery(query: string): boolean {
 		const visibleSnippets = this.getVisibleSnippets();
 		const totalSnippetCount = this.options.getSnippets().length;
@@ -968,8 +1115,13 @@ export class SnippetCompletionMenu {
 		const rankingDuration = getMonotonicTime() - rankingStart;
 		
 		const displayQuery = query ?? "";
+		const sourceLabel = this.getCurrentSource();
+		const sourceHint =
+			sourceLabel && sourceLabel !== "all"
+				? ` in ${this.getCurrentSourceLabel()}`
+				: "";
 		this.emptyStateMessage = displayQuery
-			? `No snippets match "${displayQuery}". Showing all snippets.`
+			? `No snippets match "${displayQuery}"${sourceHint}. Showing all snippets.`
 			: null;
 		
 		this.logQueryTelemetry({
@@ -1017,8 +1169,44 @@ export class SnippetCompletionMenu {
 		};
 	}
 
+	private renderSourceBadge(listEl: HTMLElement): void {
+		this.sourceLabelEl = null;
+		const sources = this.getSourceList();
+		if (sources.length <= 1) return;
+
+		const wrapper = listEl.createDiv({
+			cls: "snippet-source-badge",
+		});
+		const label = wrapper.createSpan({
+			cls: "snippet-source-label",
+			text: `Source: ${this.getCurrentSourceLabel()}`,
+		});
+		this.sourceLabelEl = label;
+
+		const hint = this.options.getMenuKeymap?.();
+		const nextKey = hint?.sourceNext;
+		const prevKey = hint?.sourcePrev;
+		if (nextKey || prevKey) {
+			wrapper.createSpan({
+				cls: "snippet-source-hint",
+				text: ` (${prevKey ?? ""}${prevKey && nextKey ? "/" : ""}${nextKey ?? ""})`,
+			});
+		}
+
+		wrapper.addEventListener("click", () => {
+			this.navigateSource(1);
+		});
+	}
+
+	private updateSourceLabel(): void {
+		if (!this.sourceLabelEl) return;
+		this.sourceLabelEl.textContent = `Source: ${this.getCurrentSourceLabel()}`;
+	}
+
 	private populateList(listEl: HTMLElement): void {
 		listEl.empty();
+
+		this.renderSourceBadge(listEl);
 
 		const algorithms = this.options.getRankingAlgorithms();
 		const enabled = algorithms.filter((algo) => algo.enabled);

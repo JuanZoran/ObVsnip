@@ -176,6 +176,33 @@ If your plugin does not need CSS, delete this file.
 	overflow-y: auto;
 }
 
+.snippet-source-badge {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 0.85em;
+	padding: 4px 8px;
+	margin-bottom: 4px;
+	background: var(--background-secondary);
+	border-radius: var(--radius-s);
+	cursor: pointer;
+	color: var(--text-muted);
+}
+
+.snippet-source-badge:hover {
+	color: var(--text-normal);
+	background: var(--background-secondary-alt);
+}
+
+.snippet-source-label {
+	font-weight: 600;
+}
+
+.snippet-source-hint {
+	font-size: 0.75em;
+	color: var(--text-faint);
+}
+
 .snippet-completion-item {
 	padding: 6px 10px;
 	border-radius: var(--radius-s);

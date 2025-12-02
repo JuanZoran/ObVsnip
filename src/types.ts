@@ -25,6 +25,7 @@ export interface ParsedSnippet extends VscodeSnippet {
 	processedText: string;
 	tabStops: TabStopInfo[];
 	variables?: SnippetVariableInfo[];
+	source?: string; // Which snippet file this snippet comes from
 }
 
 /**
@@ -67,6 +68,8 @@ export interface SnippetMenuKeymap {
 	prev: string;
 	accept: string;
 	toggle: string;
+	sourceNext?: string;
+	sourcePrev?: string;
 }
 
 export interface SnippetWidgetConfig {
@@ -96,6 +99,7 @@ export interface PluginSettings {
 	selectedVirtualTextPresetName: string;
 	referenceSnippetEnabled: boolean;  // 是否启用引用 snippet
 	referenceSyncMode: 'realtime' | 'on-jump';  // 同步模式
+	lastSnippetSource?: string;
 }
 
 /**

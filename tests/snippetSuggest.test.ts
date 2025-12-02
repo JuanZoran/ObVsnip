@@ -27,7 +27,8 @@ const createSnippet = (
 	body: string,
 	description?: string,
 	priority?: number,
-	hide?: boolean
+	hide?: boolean,
+	source?: string
 ) => ({
 	prefix,
 	body,
@@ -36,6 +37,7 @@ const createSnippet = (
 	tabStops: [],
 	priority,
 	hide,
+	source,
 });
 
 type DomHelperName = 'createEl' | 'createDiv' | 'createSpan' | 'empty' | 'toggleClass' | 'setText' | 'scrollIntoView';
@@ -230,6 +232,47 @@ describe('SnippetCompletionMenu UI flow', () => {
 		const titles = Array.from(document.querySelectorAll('.snippet-completion-title')).map((el) => el.textContent);
 		expect(titles[0]).toBe('log');
 		prefixMenu.close();
+	});
+
+	it('filters snippets by source and cycles sources with shortcuts', () => {
+		let currentSource = 'fileA.json';
+		const sources = ['all', 'fileA.json', 'fileB.json'];
+		snippets = [
+			createSnippet('alpha', 'A', undefined, undefined, false, 'fileA.json'),
+			createSnippet('beta', 'B', undefined, undefined, false, 'fileB.json'),
+		];
+		menu = new SnippetCompletionMenu(createApp(), {
+			getSnippets: () => snippets,
+			manager,
+			logger: new PluginLogger(),
+			getRankingAlgorithms: () => cloneDefaultRanking(),
+			getUsageCounts: () => new Map(),
+			getRankingAlgorithmNames: () => rankingAlgorithmNames,
+			getSources: () => sources,
+			getCurrentSource: () => currentSource,
+			setCurrentSource: (src) => {
+				currentSource = src;
+			},
+			getMenuKeymap: () => ({
+				next: 'ArrowDown',
+				prev: 'ArrowUp',
+				accept: 'Enter',
+				toggle: 'Ctrl-Space',
+				sourceNext: 'Ctrl-n',
+				sourcePrev: 'Ctrl-p',
+			}),
+		});
+
+		expect(menu.open(editor as any, '')).toBe(true);
+		let titles = Array.from(document.querySelectorAll('.snippet-completion-title')).map((el) => el.textContent);
+		expect(titles).toContain('alpha');
+		expect(titles).not.toContain('beta');
+
+		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', ctrlKey: true }));
+
+		titles = Array.from(document.querySelectorAll('.snippet-completion-title')).map((el) => el.textContent);
+		expect(titles).toContain('beta');
+		expect(titles).not.toContain('alpha');
 	});
 
 	it('matches long prefixes even when prefix window is limited', () => {

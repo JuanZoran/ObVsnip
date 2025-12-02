@@ -47,6 +47,7 @@ export default class TextSnippetsPlugin extends Plugin {
 	private snippetMenu: SnippetCompletionMenu;
 	private localeStrings: LocaleStrings = getLocaleStrings("en");
 	private usageSaveTimer: number | null = null;
+	private currentSnippetSource: string = "all";
 	async onload() {
 		await this.loadSettings();
 		this.logger.debug("general", "🚀 Loading ObVsnip plugin");
@@ -93,6 +94,10 @@ export default class TextSnippetsPlugin extends Plugin {
 			getUsageCounts: () => this.getSnippetUsageCounts(),
 			getPrefixInfo: () => this.snippetEngine.getPrefixInfo(),
 			getRankingAlgorithmNames: () => this.getRankingAlgorithmNames(),
+			getSources: () => this.getSnippetSources(),
+			getCurrentSource: () => this.getCurrentSnippetSource(),
+			setCurrentSource: (source) => this.setCurrentSnippetSource(source),
+			getMenuKeymap: () => this.settings.menuKeymap,
 		});
 		this.registerEvent(
 			this.app.workspace.on("active-leaf-change", () => {
@@ -135,6 +140,9 @@ export default class TextSnippetsPlugin extends Plugin {
 		delete rawSettings.snippetsFilePath;
 		
 		this.settings = ensurePluginSettings(rawSettings);
+		this.currentSnippetSource = this.normalizeInitialSource(
+			this.settings.lastSnippetSource
+		);
 		
 		if (!Array.isArray(this.settings.debugCategories)) {
 			this.settings.debugCategories = [];
@@ -215,6 +223,9 @@ export default class TextSnippetsPlugin extends Plugin {
 		}
 
 		this.snippetEngine.setSnippets(aggregated);
+		this.currentSnippetSource = this.normalizeInitialSource(
+			this.currentSnippetSource
+		);
 
 		if (aggregated.length > 0) {
 			const detail = successes.length
@@ -398,6 +409,30 @@ export default class TextSnippetsPlugin extends Plugin {
 			prefixInfo,
 		});
 		return context?.text ?? "";
+	}
+
+	public getSnippetSources(): string[] {
+		return ["all", ...this.settings.snippetFiles];
+	}
+
+	public getCurrentSnippetSource(): string {
+		return this.currentSnippetSource;
+	}
+
+	private normalizeInitialSource(source?: string): string {
+		const sources = ["all", ...(this.settings?.snippetFiles ?? [])];
+		if (source && sources.includes(source)) {
+			return source;
+		}
+		return "all";
+	}
+
+	public setCurrentSnippetSource(source: string): void {
+		const normalized = this.normalizeInitialSource(source);
+		if (normalized === this.currentSnippetSource) return;
+		this.currentSnippetSource = normalized;
+		this.settings.lastSnippetSource = normalized;
+		void this.saveSettings();
 	}
 
 	public applyRuntimeSettings(): void {

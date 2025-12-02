@@ -53,7 +53,10 @@ export class SnippetLoader {
 			const duration = getMonotonicTime() - loadStart;
 			this.logSnippetsLoaded(filePath, snippets, duration);
 
-			return snippets;
+			return snippets.map((snippet) => ({
+				...snippet,
+				source: filePath,
+			}));
 		} catch (error) {
 			const message = getErrorMessage(error);
 			console.error('Failed to load snippets:', error);

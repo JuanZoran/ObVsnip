@@ -75,6 +75,8 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 		prev: "ArrowUp",
 		accept: "Enter",
 		toggle: "Ctrl-Space",
+		sourceNext: "Mod-n",
+		sourcePrev: "Mod-p",
 	},
 	debugCategories: [],
 	rankingAlgorithms: DEFAULT_RANKING_ALGORITHMS.map((entry) => ({
@@ -89,6 +91,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	selectedVirtualTextPresetName: "",
 	referenceSnippetEnabled: true,
 	referenceSyncMode: 'realtime',
+	lastSnippetSource: "all",
 };
 
 export const ensurePluginSettings = (
