@@ -1,6 +1,6 @@
 {
 	"name": "obvsnip",
-	"version": "0.0.1",
+	"version": "1.0.1",
 	"description": "Obsidian VSCode snippet support",
 	"main": "main.js",
 	"scripts": {
