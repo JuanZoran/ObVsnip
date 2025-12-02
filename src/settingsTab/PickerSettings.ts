@@ -47,6 +47,18 @@ export class PickerSettings {
 				desc: this.strings.menuKeys.toggleDesc,
 				placeholder: "Mod-Shift-S",
 			},
+			{
+				key: "sourceNext",
+				name: this.strings.menuKeys.sourceNextName,
+				desc: this.strings.menuKeys.sourceNextDesc,
+				placeholder: "Mod-n",
+			},
+			{
+				key: "sourcePrev",
+				name: this.strings.menuKeys.sourcePrevName,
+				desc: this.strings.menuKeys.sourcePrevDesc,
+				placeholder: "Mod-p",
+			},
 		];
 
 		menuKeyConfigs.forEach((config) => {
@@ -81,5 +93,4 @@ export class PickerSettings {
 			);
 	}
 }
-
 

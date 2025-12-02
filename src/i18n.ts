@@ -77,6 +77,10 @@ export interface LocaleStrings {
 			acceptDesc: string;
 			toggleName: string;
 			toggleDesc: string;
+			sourceNextName: string;
+			sourceNextDesc: string;
+			sourcePrevName: string;
+			sourcePrevDesc: string;
 		};
 		rankingSection: string;
 		rankingSectionDesc: string;
@@ -184,6 +188,10 @@ const translations: Record<LocaleKey, LocaleStrings> = {
 				toggleName: "Cycle choices / toggle picker",
 				toggleDesc:
 					"Cycle choice placeholders when active, otherwise open or close the picker.",
+				sourceNextName: "Next source",
+				sourceNextDesc: "Switch to the next snippet file source.",
+				sourcePrevName: "Previous source",
+				sourcePrevDesc: "Switch to the previous snippet file source.",
 			},
 			rankingSection: "🏅 Ranking algorithms",
 			rankingSectionDesc:
@@ -314,6 +322,10 @@ const translations: Record<LocaleKey, LocaleStrings> = {
 				acceptDesc: "插入高亮的片段。",
 				toggleName: "循环选项 / 打开或关闭选择器",
 				toggleDesc: "在候选占位符上循环选项，否则打开或关闭选择器。",
+				sourceNextName: "下一个来源",
+				sourceNextDesc: "切换到下一个片段文件来源。",
+				sourcePrevName: "上一个来源",
+				sourcePrevDesc: "切换到上一个片段文件来源。",
 			},
 			rankingSection: "🏅 排序算法",
 			rankingSectionDesc:
