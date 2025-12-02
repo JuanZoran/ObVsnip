@@ -257,33 +257,6 @@ describe('SnippetCompletionMenu UI flow', () => {
 		expect(titles).toContain('snippet long');
 	});
 
-	it('matches prefixes that span multiple lines', () => {
-		const prefix = 'snippet multi';
-		const bodyText = `${prefix}\nsecond line`;
-		snippets = [createSnippet(prefix, 'body')];
-		editor = new MockEditor(bodyText);
-		editor.setCursor({ line: 1, ch: 'second line'.length });
-		menu = new SnippetCompletionMenu(createApp(), {
-			getSnippets: () => snippets,
-			manager,
-			logger: new PluginLogger(),
-			getRankingAlgorithms: () => [
-				{ id: "original-order", enabled: true },
-			],
-			getUsageCounts: () => new Map(),
-			getRankingAlgorithmNames: () => rankingAlgorithmNames,
-			getPrefixInfo: () => ({ minLength: 1, maxLength: 6 }),
-		});
-
-		expect(menu.open(editor as any, '')).toBe(true);
-
-		const emptyState = document.querySelector('.snippet-completion-empty');
-		expect(emptyState).toBeNull();
-
-		const titles = Array.from(document.querySelectorAll('.snippet-completion-title')).map((el) => el.textContent);
-		expect(titles).toContain(prefix);
-	});
-
 	it('skips hidden snippets when falling back to all snippets', () => {
 		snippets = [
 			createSnippet('hidden-snippet', 'body', 'Hidden', undefined, true),

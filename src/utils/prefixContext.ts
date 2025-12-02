@@ -23,7 +23,12 @@ export const getContextBeforeCursor = (
 
 	const cursor = editor.getCursor();
 	const endOffset = posToOffset(editor, cursor);
-	const startOffset = Math.max(0, endOffset - prefixInfo.maxLength);
+	// Restrict window to current line to avoid cross-line matching
+	const lineStartOffset = posToOffset(editor, { line: cursor.line, ch: 0 });
+	const startOffset = Math.max(
+		lineStartOffset,
+		endOffset - prefixInfo.maxLength
+	);
 	const from = offsetToPos(editor, startOffset);
 	const text = editor.getRange(from, cursor);
 

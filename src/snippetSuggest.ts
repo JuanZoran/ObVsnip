@@ -598,15 +598,6 @@ export class SnippetCompletionMenu {
 		range: { from: EditorPosition; to: EditorPosition };
 		windowLimited: boolean;
 	} {
-		const previousLineContext = this.getPreviousLineBeforeCursor(editor, cursor);
-		if (previousLineContext) {
-			return {
-				text: previousLineContext.text,
-				range: previousLineContext.range,
-				windowLimited: true,
-			};
-		}
-
 		if (from.line === cursor.line) {
 			const line = editor.getLine(cursor.line) ?? "";
 			const expandedStart = this.expandQueryStart(line, from.ch);

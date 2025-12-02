@@ -149,8 +149,8 @@ describe('getContextBeforeCursor', () => {
 		});
 
 		expect(result).not.toBeNull();
-		// Should include newline and part of previous line
-		expect(result?.text).toContain('\n');
+		// Now constrained to current line; no cross-line content
+		expect(result?.text).toBe('');
 		expect(result?.endOffset).toBe(6); // Position of start of line2 (line1\n = 6 chars)
 	});
 
@@ -186,4 +186,3 @@ describe('getContextBeforeCursor', () => {
 		expect(result?.endOffset).toBe(0);
 	});
 });
-
