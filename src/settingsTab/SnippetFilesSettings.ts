@@ -190,6 +190,10 @@ class SnippetContextModal extends Modal {
 	}
 
 	onOpen(): void {
+		this.renderModal();
+	}
+
+	private renderModal(): void {
 		const { contentEl } = this;
 		contentEl.empty();
 		contentEl.createEl("h3", { text: this.strings.snippetFilesContextTitle });
@@ -198,8 +202,36 @@ class SnippetContextModal extends Modal {
 			cls: "setting-item-description",
 		});
 
+		const anywhereEnabled = this.hasScope("anywhere");
+
+		new Setting(contentEl)
+			.setName(this.strings.snippetFilesContextLabels?.anywhere ?? "Anywhere")
+			.setDesc(anywhereEnabled ? this.strings.snippetFilesContextDesc : undefined)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(anywhereEnabled)
+					.onChange(async (value) => {
+						if (value) {
+							this.config = { ...this.config, contexts: [{ scope: "anywhere" }] };
+						} else {
+							// 关闭任意位置时，默认落到 Markdown 以避免空配置
+							this.config = {
+								...this.config,
+								contexts: [{ scope: "markdown" }],
+							};
+						}
+						await this.onSave(this.config);
+						this.renderModal();
+					})
+			);
+
+		if (!anywhereEnabled) {
+			this.renderAdvancedControls(contentEl);
+		}
+	}
+
+	private renderAdvancedControls(container: HTMLElement): void {
 		const scopes: Array<{ scope: SnippetContextScope; label: string }> = [
-			{ scope: "anywhere", label: this.strings.snippetFilesContextLabels?.anywhere ?? "Anywhere" },
 			{ scope: "markdown", label: this.strings.snippetFilesContextLabels?.markdown ?? "Markdown" },
 			{ scope: "codeblock", label: this.strings.snippetFilesContextLabels?.codeblock ?? "Code block" },
 			{ scope: "inline-code", label: this.strings.snippetFilesContextLabels?.["inline-code"] ?? "Inline code" },
@@ -207,7 +239,7 @@ class SnippetContextModal extends Modal {
 			{ scope: "inline-math", label: this.strings.snippetFilesContextLabels?.["inline-math"] ?? "Inline math" },
 		];
 
-		const list = contentEl.createDiv({ cls: "snippet-context-checkboxes" });
+		const list = container.createDiv({ cls: "snippet-context-checkboxes" });
 		for (const entry of scopes) {
 			const setting = new Setting(list)
 				.setName(entry.label)
@@ -227,21 +259,20 @@ class SnippetContextModal extends Modal {
 								contexts = contexts.filter((c) => c.scope !== entry.scope);
 							}
 							if (contexts.length === 0) {
-								contexts.push({ scope: "anywhere" });
+								contexts.push({ scope: "markdown" });
 							}
 							this.config = { ...this.config, contexts };
 							await this.onSave(this.config);
-							this.renderLanguagesSetting();
+							this.renderModal();
 						})
 				);
 			setting.setClass("snippet-context-toggle");
 		}
 
-		this.renderLanguagesSetting();
+		this.renderLanguagesSetting(container);
 	}
 
-	private renderLanguagesSetting(): void {
-		const container = this.contentEl;
+	private renderLanguagesSetting(container: HTMLElement): void {
 		const existing = container.querySelector(".snippet-context-langs");
 		if (existing) {
 			existing.remove();
