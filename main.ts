@@ -421,7 +421,7 @@ export default class TextSnippetsPlugin extends Plugin {
 	}
 
 	private normalizeInitialSource(source?: string): string {
-		const sources = ["all", ...this.getAllSnippetFilePaths()];
+		const sources = ["all", ...(this.settings?.snippetFiles ?? [])];
 		if (source && sources.includes(source)) {
 			return source;
 		}
@@ -434,12 +434,6 @@ export default class TextSnippetsPlugin extends Plugin {
 		this.currentSnippetSource = normalized;
 		this.settings.lastSnippetSource = normalized;
 		void this.saveSettings();
-	}
-
-	private getAllSnippetFilePaths(): string[] {
-		return Array.isArray(this.settings?.snippetFiles)
-			? [...this.settings.snippetFiles]
-			: [];
 	}
 
 	public applyRuntimeSettings(): void {

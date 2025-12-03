@@ -20,7 +20,8 @@ const matchesCondition = (condition: SnippetContextCondition, ctx: CursorContext
 		case "inline-math":
 			return ctx.inInlineMath && !ctx.inMathBlock;
 		default:
-			return true;
+			// 未知 scope 时不放行，避免规则被绕过
+			return false;
 	}
 };
 

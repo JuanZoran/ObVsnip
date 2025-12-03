@@ -206,7 +206,7 @@ class SnippetContextModal extends Modal {
 
 		new Setting(contentEl)
 			.setName(this.strings.snippetFilesContextLabels?.anywhere ?? "Anywhere")
-			.setDesc(anywhereEnabled ? this.strings.snippetFilesContextDesc : undefined)
+			.setDesc(anywhereEnabled ? this.strings.snippetFilesContextDesc : "")
 			.addToggle((toggle) =>
 				toggle
 					.setValue(anywhereEnabled)
@@ -277,18 +277,17 @@ class SnippetContextModal extends Modal {
 		if (existing) {
 			existing.remove();
 		}
+		if (!this.hasScope("codeblock")) {
+			return;
+		}
 		const wrapper = container.createDiv({ cls: "snippet-context-langs" });
 		const desc = this.strings.snippetFilesContextLanguages;
 		new Setting(wrapper)
 			.setName(desc)
 			.setDesc(this.strings.snippetFilesContextLanguagesPlaceholder)
 			.addText((text) => {
-				if (!this.hasScope("codeblock")) {
-					text.setValue("").setDisabled(true);
-				} else {
-					const langs = this.config.contexts?.find((c) => c.scope === "codeblock")?.languages ?? [];
-					text.setValue(langs.join(", "));
-				}
+				const langs = this.config.contexts?.find((c) => c.scope === "codeblock")?.languages ?? [];
+				text.setValue(langs.join(", "));
 				text.onChange(async (value) => {
 					const languages = value
 						.split(",")
