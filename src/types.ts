@@ -28,12 +28,31 @@ export interface ParsedSnippet extends VscodeSnippet {
 	source?: string; // Which snippet file this snippet comes from
 }
 
+export type SnippetContextScope =
+	| "anywhere"
+	| "markdown"
+	| "codeblock"
+	| "inline-code"
+	| "mathblock"
+	| "inline-math";
+
+export interface SnippetContextCondition {
+	scope: SnippetContextScope;
+	languages?: string[];
+}
+
+export interface SnippetFileConfig {
+	path: string;
+	enabled?: boolean;
+	contexts?: SnippetContextCondition[];
+}
+
 /**
  * Trie node for prefix matching
  */
 export interface TrieNode {
 	children: Map<string, TrieNode>;
-	snippet?: ParsedSnippet; // Leaf node with snippet
+	snippets: ParsedSnippet[]; // Leaf node with snippet(s)
 }
 
 /**
@@ -100,6 +119,7 @@ export interface PluginSettings {
 	referenceSnippetEnabled: boolean;  // 是否启用引用 snippet
 	referenceSyncMode: 'realtime' | 'on-jump';  // 同步模式
 	lastSnippetSource?: string;
+	snippetFileConfigs: Record<string, SnippetFileConfig>;
 }
 
 /**
@@ -111,6 +131,7 @@ export interface RawPluginSettings extends Partial<PluginSettings> {
 	 * @deprecated Use snippetFiles instead
 	 */
 	snippetsFilePath?: string;
+	snippetFileConfigs?: Record<string, SnippetFileConfig>;
 }
 
 export interface VirtualTextColorPreset {

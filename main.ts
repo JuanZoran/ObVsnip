@@ -98,6 +98,7 @@ export default class TextSnippetsPlugin extends Plugin {
 			getCurrentSource: () => this.getCurrentSnippetSource(),
 			setCurrentSource: (source) => this.setCurrentSnippetSource(source),
 			getMenuKeymap: () => this.settings.menuKeymap,
+			getSnippetFileConfigs: () => this.settings.snippetFileConfigs,
 		});
 		this.registerEvent(
 			this.app.workspace.on("active-leaf-change", () => {
@@ -420,7 +421,7 @@ export default class TextSnippetsPlugin extends Plugin {
 	}
 
 	private normalizeInitialSource(source?: string): string {
-		const sources = ["all", ...(this.settings?.snippetFiles ?? [])];
+		const sources = ["all", ...this.getAllSnippetFilePaths()];
 		if (source && sources.includes(source)) {
 			return source;
 		}
@@ -433,6 +434,12 @@ export default class TextSnippetsPlugin extends Plugin {
 		this.currentSnippetSource = normalized;
 		this.settings.lastSnippetSource = normalized;
 		void this.saveSettings();
+	}
+
+	private getAllSnippetFilePaths(): string[] {
+		return Array.isArray(this.settings?.snippetFiles)
+			? [...this.settings.snippetFiles]
+			: [];
 	}
 
 	public applyRuntimeSettings(): void {

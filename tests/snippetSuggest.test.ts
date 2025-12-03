@@ -207,6 +207,51 @@ describe('SnippetCompletionMenu UI flow', () => {
 		menu.close();
 	});
 
+	it('falls back to "all" when current source is blocked by context rules', () => {
+		const localSnippets = [
+			createSnippet('codeOnly', 'body', 'code', 0, false, 'file-a'),
+			createSnippet('anywhere', 'body', 'anywhere', 0, false, 'file-b'),
+		];
+		const editorCtx = new MockEditor('plain');
+		editorCtx.setCursor({ line: 0, ch: 1 });
+		(getActiveEditor as jest.Mock).mockReturnValue(editorCtx);
+
+		let currentSource = 'file-a';
+		const sources = ['all', 'file-a', 'file-b'];
+		const localMenu = new SnippetCompletionMenu(createApp(), {
+			getSnippets: () => localSnippets,
+			manager,
+			logger: new PluginLogger(),
+			getRankingAlgorithms: () => cloneDefaultRanking(),
+			getUsageCounts: () => new Map(),
+			getRankingAlgorithmNames: () => rankingAlgorithmNames,
+			getSources: () => sources,
+			getCurrentSource: () => currentSource,
+			setCurrentSource: (source) => {
+				currentSource = source;
+			},
+			getSnippetFileConfigs: () => ({
+				'file-a': {
+					path: 'file-a',
+					enabled: true,
+					contexts: [{ scope: 'codeblock', languages: ['js'] }],
+				},
+				'file-b': {
+					path: 'file-b',
+					enabled: true,
+					contexts: [{ scope: 'anywhere' }],
+				},
+			}),
+		});
+
+		expect(localMenu.open(editorCtx as any, 'co')).toBe(true);
+		const entries = (localMenu as any).entries as any[];
+		expect(entries).toHaveLength(1);
+		expect(entries[0].prefix).toBe('anywhere');
+		expect(currentSource).toBe('all');
+		localMenu.close();
+	});
+
 	it('handles keyboard navigation and accepts selection', () => {
 		expect(menu.open(editor as any, '')).toBe(true);
 		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown' }));

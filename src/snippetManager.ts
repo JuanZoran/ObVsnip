@@ -37,6 +37,8 @@ import {
 import {
     TabStopPlaceholderStrategySelector,
 } from "./strategies/tabStopPlaceholderStrategy";
+import { getCursorContext } from "./utils/editorContext";
+import { filterSnippetsByContext } from "./utils/snippetContext";
 
 type SnippetManagerOptions = {
     onSnippetApplied?: (snippet: ParsedSnippet) => void;
@@ -407,10 +409,22 @@ export class SnippetManager {
             return null;
         }
 
-        const snippet = this.snippetEngine.matchSnippetInContext(context.text);
-        if (!snippet) {
-            return null;
-        }
+		const matches = this.snippetEngine.matchSnippets(context.text);
+		if (matches.length === 0) {
+			return null;
+		}
+
+		const cursorContext = getCursorContext(editor);
+		const settings = this.options?.getSettings?.();
+		const filtered = filterSnippetsByContext(
+			matches,
+			cursorContext,
+			settings?.snippetFileConfigs
+		);
+		const snippet = filtered[0];
+		if (!snippet) {
+			return null;
+		}
 
         const startOffset = Math.max(0, context.endOffset - snippet.prefix.length);
         return {

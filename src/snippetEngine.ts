@@ -5,7 +5,7 @@ import { ParsedSnippet, TrieNode, PrefixInfo } from "./types";
  */
 export class SnippetEngine {
 	private snippets: ParsedSnippet[] = [];
-	private trie: TrieNode = { children: new Map() };
+	private trie: TrieNode = { children: new Map(), snippets: [] };
 	private prefixInfo: PrefixInfo = { minLength: 0, maxLength: 0 };
 	private snippetsHash: string = '';
 
@@ -62,19 +62,19 @@ export class SnippetEngine {
 	 * Build Trie from snippets
 	 */
 	private buildTrie(): void {
-		this.trie = { children: new Map() };
+		this.trie = { children: new Map(), snippets: [] };
 
 		for (const snippet of this.snippets) {
 			let node = this.trie;
 			for (const char of snippet.prefix) {
 				let nextNode = node.children.get(char);
 				if (!nextNode) {
-					nextNode = { children: new Map() };
+					nextNode = { children: new Map(), snippets: [] };
 					node.children.set(char, nextNode);
 				}
 				node = nextNode;
 			}
-			node.snippet = snippet;
+			node.snippets.push(snippet);
 		}
 	}
 
@@ -95,8 +95,12 @@ export class SnippetEngine {
 	}
 
 	matchSnippetInContext(beforeCursor: string): ParsedSnippet | undefined {
+		return this.matchSnippets(beforeCursor)[0];
+	}
+
+	matchSnippets(beforeCursor: string): ParsedSnippet[] {
 		if (this.prefixInfo.maxLength === 0) {
-			return undefined;
+			return [];
 		}
 
 		const relevantLength = Math.min(
@@ -104,35 +108,36 @@ export class SnippetEngine {
 			this.prefixInfo.maxLength
 		);
 		if (relevantLength === 0) {
-			return undefined;
+			return [];
 		}
 
 		const relevantText = beforeCursor.slice(-relevantLength);
+		const collected: ParsedSnippet[] = [];
 
 		// Try matching from shortest substring nearest the cursor, expanding outwards
 		for (let len = 1; len <= relevantText.length; len++) {
 			const prefixStart = relevantText.length - len;
 			const prefix = relevantText.substring(prefixStart);
-			const snippet = this.findByPrefix(prefix);
-			if (snippet) {
-				return snippet;
+			const snippets = this.findByPrefix(prefix);
+			if (snippets && snippets.length > 0) {
+				collected.push(...snippets);
 			}
 		}
 
-		return undefined;
+		return collected;
 	}
 
 	/**
 	 * Find snippet in Trie by exact prefix match
 	 */
-	private findByPrefix(prefix: string): ParsedSnippet | undefined {
+	private findByPrefix(prefix: string): ParsedSnippet[] | undefined {
 		let node = this.trie;
 		for (const char of prefix) {
 			const next = node.children.get(char);
 			if (!next) return undefined;
 			node = next;
 		}
-		return node.snippet;
+		return node.snippets;
 	}
 
 	/**

@@ -144,6 +144,12 @@ export interface LocaleStrings {
 		snippetFilesAddButton: string;
 		snippetFilesReloadButton: string;
 		snippetFilesRemoveButton: string;
+		snippetFilesContextButton: string;
+		snippetFilesContextTitle: string;
+		snippetFilesContextDesc: string;
+		snippetFilesContextLanguages: string;
+		snippetFilesContextLanguagesPlaceholder: string;
+		snippetFilesContextLabels: Record<string, string>;
 		referenceSection: string;
 		referenceSectionDesc: string;
 		referenceEnabledName: string;
@@ -283,6 +289,20 @@ const translations: Record<LocaleKey, LocaleStrings> = {
 			snippetFilesAddButton: "Add file",
 			snippetFilesReloadButton: "Reload snippets",
 			snippetFilesRemoveButton: "Remove",
+			snippetFilesContextButton: "Context rules",
+			snippetFilesContextTitle: "Context rules",
+			snippetFilesContextDesc:
+				"Control where snippets from this file are allowed to trigger.",
+			snippetFilesContextLanguages: "Code block languages (comma-separated, empty = any)",
+			snippetFilesContextLanguagesPlaceholder: "e.g. javascript, typescript, python",
+			snippetFilesContextLabels: {
+				anywhere: "Anywhere",
+				markdown: "Markdown body",
+				codeblock: "Code block",
+				"inline-code": "Inline code",
+				mathblock: "Math block",
+				"inline-math": "Inline math",
+			},
 			referenceSection: "Reference Snippet",
 			referenceSectionDesc: "Enable reference snippets to allow the same tab stop index (e.g., $1) to appear in multiple positions. When you edit one position, other positions can sync automatically.",
 			referenceEnabledName: "Enable Reference Snippets",
@@ -413,6 +433,20 @@ const translations: Record<LocaleKey, LocaleStrings> = {
 			snippetFilesAddButton: "添加文件",
 			snippetFilesReloadButton: "重新加载片段",
 			snippetFilesRemoveButton: "删除",
+			snippetFilesContextButton: "上下文规则",
+			snippetFilesContextTitle: "上下文规则",
+			snippetFilesContextDesc:
+				"限制该文件中的 snippets 在哪些场景下触发。",
+			snippetFilesContextLanguages: "代码块语言（逗号分隔，留空表示任意）",
+			snippetFilesContextLanguagesPlaceholder: "例如 javascript, typescript, python",
+			snippetFilesContextLabels: {
+				anywhere: "任意位置",
+				markdown: "Markdown 正文",
+				codeblock: "代码块",
+				"inline-code": "行内代码",
+				mathblock: "公式块 ($$)",
+				"inline-math": "行内公式 ($)",
+			},
 			referenceSection: "引用 Snippet",
 			referenceSectionDesc: "启用引用片段功能，允许同一个占位符索引（如 $1）在多个位置出现。当您编辑其中一个位置时，其他位置可以自动同步。",
 			referenceEnabledName: "启用引用片段",

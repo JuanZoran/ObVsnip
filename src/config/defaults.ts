@@ -2,6 +2,8 @@ import type {
 	PluginSettings,
 	RankingAlgorithmSetting,
 	VirtualTextColorPreset,
+	SnippetFileConfig,
+	SnippetContextCondition,
 } from "../types";
 import { DEFAULT_RANKING_ALGORITHMS } from "../rankingConfig";
 
@@ -66,6 +68,7 @@ export const BUILTIN_COLOR_SCHEMES: VirtualTextColorPreset[] = [
 
 export const DEFAULT_SETTINGS: PluginSettings = {
 	snippetFiles: [],
+	snippetFileConfigs: {},
 	showVirtualText: true,
 	virtualTextColor: DEFAULT_COLOR_SCHEME.placeholderColor,
 	enableDebugLogs: false,
@@ -94,6 +97,50 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	lastSnippetSource: "all",
 };
 
+const DEFAULT_CONTEXTS: SnippetContextCondition[] = [{ scope: "anywhere" }];
+
+const normalizeContexts = (
+	contexts?: SnippetContextCondition[]
+): SnippetContextCondition[] => {
+	if (!Array.isArray(contexts) || contexts.length === 0) {
+		return [...DEFAULT_CONTEXTS];
+	}
+	return contexts
+		.map((entry) => ({
+			scope: entry.scope ?? "anywhere",
+			languages: Array.isArray(entry.languages)
+				? entry.languages.filter((lang) => typeof lang === "string" && lang.trim().length > 0)
+				: undefined,
+		}))
+		.filter((entry) => !!entry.scope);
+};
+
+const normalizeSnippetFileConfigs = (
+	snippetFiles: string[],
+	configs?: Record<string, SnippetFileConfig>
+): { files: string[]; configs: Record<string, SnippetFileConfig> } => {
+	const baseFiles = Array.isArray(snippetFiles) ? [...snippetFiles] : [];
+	const existingConfigs = configs ?? {};
+	const normalizedFiles = Array.from(
+		new Set(baseFiles.filter((p) => typeof p === "string" && p.length > 0))
+	);
+	const normalizedConfigs: Record<string, SnippetFileConfig> = {};
+
+	const ensureConfig = (path: string, config?: SnippetFileConfig): SnippetFileConfig => ({
+		path,
+		enabled: typeof config?.enabled === "boolean" ? config.enabled : true,
+		contexts: normalizeContexts(config?.contexts),
+	});
+
+	for (const path of normalizedFiles) {
+		normalizedConfigs[path] = ensureConfig(path, existingConfigs[path]);
+	}
+
+	// 丢弃未在 snippetFiles 中声明的残留配置，避免幽灵来源
+
+	return { files: normalizedFiles, configs: normalizedConfigs };
+};
+
 export const ensurePluginSettings = (
 	raw?: Partial<PluginSettings>
 ): PluginSettings => {
@@ -105,6 +152,12 @@ export const ensurePluginSettings = (
 			...raw?.menuKeymap,
 		},
 	};
+	const normalizedSnippetFiles = normalizeSnippetFileConfigs(
+		combined.snippetFiles,
+		raw?.snippetFileConfigs ?? combined.snippetFileConfigs
+	);
+	combined.snippetFiles = normalizedSnippetFiles.files;
+	combined.snippetFileConfigs = normalizedSnippetFiles.configs;
 	combined.rankingAlgorithms = raw?.rankingAlgorithms
 		? [...raw.rankingAlgorithms]
 		: [...DEFAULT_SETTINGS.rankingAlgorithms];

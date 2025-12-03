@@ -7,6 +7,8 @@ import type {
 	RankingAlgorithmId,
 	RankingAlgorithmSetting,
 	SnippetMenuKeymap,
+	SnippetFileConfig,
+	PluginSettings,
 } from "./types";
 
 import { SnippetManager } from "./snippetManager";
@@ -20,6 +22,8 @@ import { getMonotonicTime } from "./telemetry";
 import { getSnippetWidgetConfig } from "./snippetSession";
 import { applySnippetStyles } from "./utils/styleUtils";
 import { renderChoiceList } from "./utils/choiceUtils";
+import { getCursorContext } from "./utils/editorContext";
+import { filterSnippetsByContext } from "./utils/snippetContext";
 
 interface SnippetMenuOptions {
 	getSnippets: () => ParsedSnippet[];
@@ -36,6 +40,8 @@ interface SnippetMenuOptions {
 	getCurrentSource?: () => string;
 	setCurrentSource?: (source: string) => void;
 	getMenuKeymap?: () => SnippetMenuKeymap;
+	getSnippetFileConfigs?: () => Record<string, SnippetFileConfig>;
+	getSettings?: () => PluginSettings;
 }
 
 const matchesFuzzy = (source: string, query: string): boolean => {
@@ -274,7 +280,18 @@ export class SnippetCompletionMenu {
 
 	private getVisibleSnippets(): ParsedSnippet[] {
 		const snippets = this.options.getSnippets().filter((snippet) => !snippet.hide);
-		return this.filterBySource(snippets);
+		const sourceFiltered = this.filterBySource(snippets);
+		const contextFiltered = this.filterByContext(sourceFiltered);
+
+		// 如果当前来源在上下文下无可用条目，自动回退到 all 以避免空菜单
+		if (contextFiltered.length === 0 && this.getCurrentSource() !== "all") {
+			this.options.setCurrentSource?.("all");
+			this.updateSourceLabel();
+			const fallbackFiltered = this.filterByContext(this.filterBySource(snippets));
+			return fallbackFiltered;
+		}
+
+		return contextFiltered;
 	}
 
 	private getSourceList(): string[] {
@@ -299,6 +316,14 @@ export class SnippetCompletionMenu {
 		const source = this.getCurrentSource();
 		if (source === "all") return snippets;
 		return snippets.filter((snippet) => snippet.source === source);
+	}
+
+	private filterByContext(snippets: ParsedSnippet[]): ParsedSnippet[] {
+		const editor = this.currentEditor ?? getActiveEditor(this.app);
+		if (!editor) return snippets;
+		const ctx = getCursorContext(editor);
+		const configs = this.options.getSnippetFileConfigs?.();
+		return filterSnippetsByContext(snippets, ctx, configs);
 	}
 
 	/**

@@ -1,5 +1,6 @@
-import { App, Menu, Notice, Setting, TFile } from "obsidian";
+import { App, Menu, Notice, Setting, TFile, Modal } from "obsidian";
 import type TextSnippetsPlugin from "../../main";
+import type { SnippetFileConfig, SnippetContextScope } from "../types";
 
 type SettingsStrings = ReturnType<TextSnippetsPlugin["getStrings"]>["settings"];
 
@@ -66,6 +67,11 @@ export class SnippetFilesSettings {
 					.setWarning()
 					.onClick(() => this.handleRemoveSnippetFile(path))
 			);
+			row.addButton((btn) =>
+				btn
+					.setButtonText(this.strings.snippetFilesContextButton)
+					.onClick(() => this.openContextModal(path))
+			);
 		});
 	}
 
@@ -102,6 +108,7 @@ export class SnippetFilesSettings {
 		if (!path) return;
 		if (!this.plugin.settings.snippetFiles.includes(path)) {
 			this.plugin.settings.snippetFiles.push(path);
+			this.plugin.settings.snippetFileConfigs[path] = this.getOrCreateConfig(path);
 			await this.plugin.saveSettings();
 			await this.plugin.loadSnippetsFromFiles();
 		}
@@ -112,6 +119,7 @@ export class SnippetFilesSettings {
 		this.plugin.settings.snippetFiles = this.plugin.settings.snippetFiles.filter(
 			(p) => p !== path
 		);
+		delete this.plugin.settings.snippetFileConfigs[path];
 		await this.plugin.saveSettings();
 		await this.plugin.loadSnippetsFromFiles();
 		this.refresh();
@@ -120,6 +128,151 @@ export class SnippetFilesSettings {
 	private async handleReloadSnippets(): Promise<void> {
 		await this.plugin.loadSnippetsFromFiles();
 	}
+
+	private getOrCreateConfig(path: string): SnippetFileConfig {
+		const existing = this.plugin.settings.snippetFileConfigs[path];
+		if (existing) return existing;
+		const config: SnippetFileConfig = {
+			path,
+			enabled: true,
+			contexts: [{ scope: "anywhere" }],
+		};
+		this.plugin.settings.snippetFileConfigs[path] = config;
+		return config;
+	}
+
+	private hasScope(config: SnippetFileConfig, scope: SnippetContextScope): boolean {
+		return (config.contexts ?? []).some((entry) => entry.scope === scope);
+	}
+
+	private async updateConfig(path: string, partial: Partial<SnippetFileConfig>): Promise<void> {
+		const current = this.getOrCreateConfig(path);
+		const next: SnippetFileConfig = {
+			...current,
+			...partial,
+		};
+		if (!next.contexts || next.contexts.length === 0) {
+			next.contexts = [{ scope: "anywhere" }];
+		}
+		this.plugin.settings.snippetFileConfigs[path] = next;
+		await this.plugin.saveSettings();
+	}
+
+	private openContextModal(path: string): void {
+		const config = this.getOrCreateConfig(path);
+		const modal = new SnippetContextModal(
+			this.app,
+			path,
+			config,
+			this.strings,
+			async (updated) => {
+				await this.updateConfig(path, updated);
+				this.refresh();
+			}
+		);
+		modal.open();
+	}
 }
 
+class SnippetContextModal extends Modal {
+	constructor(
+		app: App,
+		private path: string,
+		private config: SnippetFileConfig,
+		private strings: SettingsStrings,
+		private onSave: (config: SnippetFileConfig) => Promise<void>
+	) {
+		super(app);
+	}
 
+	private hasScope(scope: SnippetContextScope): boolean {
+		return (this.config.contexts ?? []).some((entry) => entry.scope === scope);
+	}
+
+	onOpen(): void {
+		const { contentEl } = this;
+		contentEl.empty();
+		contentEl.createEl("h3", { text: this.strings.snippetFilesContextTitle });
+		contentEl.createEl("p", {
+			text: this.strings.snippetFilesContextDesc,
+			cls: "setting-item-description",
+		});
+
+		const scopes: Array<{ scope: SnippetContextScope; label: string }> = [
+			{ scope: "anywhere", label: this.strings.snippetFilesContextLabels?.anywhere ?? "Anywhere" },
+			{ scope: "markdown", label: this.strings.snippetFilesContextLabels?.markdown ?? "Markdown" },
+			{ scope: "codeblock", label: this.strings.snippetFilesContextLabels?.codeblock ?? "Code block" },
+			{ scope: "inline-code", label: this.strings.snippetFilesContextLabels?.["inline-code"] ?? "Inline code" },
+			{ scope: "mathblock", label: this.strings.snippetFilesContextLabels?.mathblock ?? "Math block" },
+			{ scope: "inline-math", label: this.strings.snippetFilesContextLabels?.["inline-math"] ?? "Inline math" },
+		];
+
+		const list = contentEl.createDiv({ cls: "snippet-context-checkboxes" });
+		for (const entry of scopes) {
+			const setting = new Setting(list)
+				.setName(entry.label)
+				.addToggle((toggle) =>
+					toggle
+						.setValue(this.hasScope(entry.scope))
+						.onChange(async (value) => {
+							let contexts = [...(this.config.contexts ?? [])];
+							const exists = contexts.some((c) => c.scope === entry.scope);
+							if (value && !exists) {
+								contexts.push(
+									entry.scope === "codeblock"
+										? { scope: entry.scope, languages: [] }
+										: { scope: entry.scope }
+								);
+							} else if (!value) {
+								contexts = contexts.filter((c) => c.scope !== entry.scope);
+							}
+							if (contexts.length === 0) {
+								contexts.push({ scope: "anywhere" });
+							}
+							this.config = { ...this.config, contexts };
+							await this.onSave(this.config);
+							this.renderLanguagesSetting();
+						})
+				);
+			setting.setClass("snippet-context-toggle");
+		}
+
+		this.renderLanguagesSetting();
+	}
+
+	private renderLanguagesSetting(): void {
+		const container = this.contentEl;
+		const existing = container.querySelector(".snippet-context-langs");
+		if (existing) {
+			existing.remove();
+		}
+		const wrapper = container.createDiv({ cls: "snippet-context-langs" });
+		const desc = this.strings.snippetFilesContextLanguages;
+		new Setting(wrapper)
+			.setName(desc)
+			.setDesc(this.strings.snippetFilesContextLanguagesPlaceholder)
+			.addText((text) => {
+				if (!this.hasScope("codeblock")) {
+					text.setValue("").setDisabled(true);
+				} else {
+					const langs = this.config.contexts?.find((c) => c.scope === "codeblock")?.languages ?? [];
+					text.setValue(langs.join(", "));
+				}
+				text.onChange(async (value) => {
+					const languages = value
+						.split(",")
+						.map((s) => s.trim())
+						.filter((s) => s.length > 0);
+					const contexts = (this.config.contexts ?? []).map((entry) =>
+						entry.scope === "codeblock" ? { ...entry, languages } : entry
+					);
+					this.config = { ...this.config, contexts };
+					await this.onSave(this.config);
+				});
+			});
+	}
+
+	onClose(): void {
+		this.contentEl.empty();
+	}
+}

@@ -29,6 +29,14 @@ export class MockEditor {
 		return this.text[line] ?? '';
 	}
 
+	lineCount(): number {
+		return this.text.length;
+	}
+
+	getValue(): string {
+		return this.getText();
+	}
+
 	getSelection(): string {
 		const from = this.posToOffset(this.selection.anchor);
 		const to = this.posToOffset(this.selection.head);
