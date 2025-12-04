@@ -1,6 +1,10 @@
 import { Setting } from "obsidian";
 import type TextSnippetsPlugin from "../../main";
-import type { RankingAlgorithmId, RankingAlgorithmSetting } from "../types";
+import type {
+	RankingAlgorithmId,
+	RankingAlgorithmSetting,
+	MatchQualityBias,
+} from "../types";
 import {
 	moveEnabledAlgorithm,
 	normalizeRankingAlgorithms,
@@ -22,6 +26,7 @@ export class RankingSettings {
 	render(containerEl: HTMLElement): void {
 		this.renderRankingAlgorithmSettings(containerEl);
 		this.renderRankingPreview(containerEl);
+		this.renderMatchQualityBiasSettings(containerEl);
 	}
 
 	private renderRankingAlgorithmSettings(containerEl: HTMLElement): void {
@@ -156,6 +161,56 @@ export class RankingSettings {
 		rowEl.insertBefore(handle, rowEl.firstChild);
 	}
 
+	private renderMatchQualityBiasSettings(containerEl: HTMLElement): void {
+		containerEl.createEl("h4", { text: this.strings.matchQualityHeading });
+		containerEl.createEl("p", {
+			text: this.strings.matchQualityDesc,
+			cls: "setting-item-description",
+		});
+		this.renderBiasInput(
+			containerEl,
+			"exactPrefix",
+			this.strings.matchQualityExactName,
+			this.strings.matchQualityExactDesc
+		);
+		this.renderBiasInput(
+			containerEl,
+			"prefix",
+			this.strings.matchQualityPrefixName,
+			this.strings.matchQualityPrefixDesc
+		);
+		this.renderBiasInput(
+			containerEl,
+			"description",
+			this.strings.matchQualityDescriptionName,
+			this.strings.matchQualityDescriptionDesc
+		);
+	}
+
+	private renderBiasInput(
+		containerEl: HTMLElement,
+		key: keyof MatchQualityBias,
+		name: string,
+		desc: string
+	): void {
+		const current = this.plugin.settings.matchQualityBias[key];
+		new Setting(containerEl)
+			.setName(name)
+			.setDesc(desc)
+			.addText((text) => {
+				text.setValue(String(current));
+				text.inputEl.type = "number";
+				text.onChange(async (value) => {
+					const parsed = Number(value);
+					if (Number.isNaN(parsed)) {
+						return;
+					}
+					this.plugin.settings.matchQualityBias[key] = parsed;
+					await this.plugin.saveSettings();
+				});
+			});
+	}
+
 	private handleRankingDragStart(
 		event: DragEvent,
 		algorithm: RankingAlgorithmSetting
@@ -228,5 +283,3 @@ export class RankingSettings {
 		this.renderRankingAlgorithmRows();
 	}
 }
-
-

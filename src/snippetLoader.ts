@@ -4,6 +4,7 @@ import { SnippetParser } from "./snippetParser";
 import { PluginLogger } from "./logger";
 import { getMonotonicTime } from "./telemetry";
 import { getErrorMessage } from "./utils/errorUtils";
+import { getVaultFileByPath } from "./utils/vaultUtils";
 
 /**
  * Handles loading and managing snippet files
@@ -26,19 +27,14 @@ export class SnippetLoader {
 				throw new Error('Snippets file path is not set');
 			}
 
-			const file = this.app.vault.getAbstractFileByPath(filePath);
+			const file = getVaultFileByPath(this.app.vault, filePath);
 			if (!file) {
 				console.error(`❌ File not found: ${filePath}`);
 				this.logAvailableFiles();
 				return [];
 			}
 
-			if (!file.hasOwnProperty('stat')) {
-				console.error(`❌ Path is not a file: ${filePath}`);
-				return [];
-			}
-
-			const content = await this.app.vault.read(file as TFile);
+			const content = await this.app.vault.read(file);
 			this.logger.debug("loader", `✅ Read file: ${content.length} characters`);
 
 			let snippets: ParsedSnippet[];

@@ -99,6 +99,7 @@ export default class TextSnippetsPlugin extends Plugin {
 			setCurrentSource: (source) => this.setCurrentSnippetSource(source),
 			getMenuKeymap: () => this.settings.menuKeymap,
 			getSnippetFileConfigs: () => this.settings.snippetFileConfigs,
+			getSettings: () => this.settings,
 		});
 		this.registerEvent(
 			this.app.workspace.on("active-leaf-change", () => {
@@ -120,6 +121,18 @@ export default class TextSnippetsPlugin extends Plugin {
 		this.flushUsageSave();
 		this.logger.debug("general", "🛑 Unloading ObVsnip plugin");
 		this.snippetMenu?.close();
+	}
+
+	async onExternalSettingsChange() {
+		this.logger.debug("general", "🔁 Detected external settings change");
+		await this.loadSettings();
+		this.applyRuntimeSettings();
+		this.snippetMenu?.close();
+		if (this.settings.snippetFiles.length > 0) {
+			await this.loadSnippetsFromFiles();
+		} else {
+			this.snippetEngine.setSnippets([]);
+		}
 	}
 
 	async loadSettings() {

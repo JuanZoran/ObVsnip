@@ -57,6 +57,18 @@ describe("snippet ranking pipeline", () => {
 		expect(sorted[0].prefix).toBe("flp helper");
 	});
 
+	it("prefers provided fuzzy scores over legacy scoring when present", () => {
+		const matchScores = new Map<ParsedSnippet, number>([
+			[baseSnippets[0], 1],
+			[baseSnippets[1], 5],
+		]);
+		const sorted = rankSnippets(baseSnippets, [fuzzyAlgorithm], {
+			matchScores,
+			query: "",
+		});
+		expect(sorted[0]).toBe(baseSnippets[0]);
+	});
+
 	it("falls back to alphabetical sorting when smarter strategies are disabled", () => {
 		const sorted = rankSnippets(baseSnippets, [alphabeticalAlgorithm], {
 			query: "",

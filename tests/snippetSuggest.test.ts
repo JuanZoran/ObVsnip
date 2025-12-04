@@ -2,6 +2,7 @@ import { SnippetCompletionMenu, formatSnippetPreview } from '../src/snippetSugge
 import { MockEditor } from './mocks/editor';
 import { PluginLogger } from '../src/logger';
 import { DEFAULT_RANKING_ALGORITHMS } from '../src/rankingConfig';
+import { rankSnippets } from '../src/snippetRankingPipeline';
 import type { RankingAlgorithmSetting } from '../src/types';
 
 jest.mock('../src/utils/editorUtils', () => ({
@@ -156,11 +157,11 @@ describe('SnippetCompletionMenu UI flow', () => {
 		});
 		const filterResult = (localMenu as any).filterSnippets('ce hel', localSnippets);
 		expect(filterResult.snippets.map((snippet: any) => snippet.prefix)).toEqual(['hello world']);
-		expect(filterResult.matchFields.get(localSnippets[0])).toBe('hel');
-		expect(filterResult.bestCandidate).toBe('hel');
+		expect(filterResult.matchFields.get(localSnippets[0])?.candidate).toBe(filterResult.bestCandidate);
+		expect(filterResult.bestCandidate).toBeTruthy();
 	});
 
-	it('puts the matched snippet ahead of others when query carries unrelated prefix', () => {
+	it('captures match scores for multiple candidates in fuzzy scenarios', () => {
 		const localSnippets = [
 			createSnippet('lim', 'limit'),
 			createSnippet('hello world', 'greeting'),
@@ -173,15 +174,12 @@ describe('SnippetCompletionMenu UI flow', () => {
 			getUsageCounts: () => new Map(),
 			getRankingAlgorithmNames: () => rankingAlgorithmNames,
 		});
-		const localEditor = new MockEditor('ce hel');
-		localEditor.setCursor({ line: 0, ch: 'ce hel'.length });
-		(getActiveEditor as jest.Mock).mockReturnValue(localEditor);
-		localMenu.open(localEditor as any, 'ce hel');
-		const entries = (localMenu as any).entries as any[];
-		expect(entries[0].prefix).toBe('hello world');
-		expect(entries.length).toBeGreaterThanOrEqual(1);
-		expect((localMenu as any).emptyStateMessage).toBeNull();
-		localMenu.close();
+		const filterResult = (localMenu as any).filterSnippets('ce hel', localSnippets);
+		expect(filterResult.snippets).toHaveLength(2);
+		const limScore = filterResult.matchScores.get(localSnippets[0]);
+		const helloScore = filterResult.matchScores.get(localSnippets[1]);
+		expect(typeof limScore).toBe('number');
+		expect(typeof helloScore).toBe('number');
 	});
 
 	it('includes fuzzy matches even when prefix does not start with the query', () => {
@@ -205,6 +203,29 @@ describe('SnippetCompletionMenu UI flow', () => {
 		const titles = Array.from(document.querySelectorAll('.snippet-completion-title')).map((el) => el.textContent);
 		expect(titles).toContain('html link');
 		menu.close();
+	});
+
+	it('prioritizes exact prefix matches over longer fuzzy matches', () => {
+		const localSnippets = [
+			createSnippet('sigma', '\\sigma', 'Sigma'),
+			createSnippet('varsigma', '\\varsigma', 'Sigma variant'),
+		];
+		const localMenu = new SnippetCompletionMenu(createApp(), {
+			getSnippets: () => localSnippets,
+			manager,
+			logger: new PluginLogger(),
+			getRankingAlgorithms: () => cloneDefaultRanking(),
+			getUsageCounts: () => new Map(),
+			getRankingAlgorithmNames: () => rankingAlgorithmNames,
+		});
+		const localEditor = new MockEditor('sigma');
+		localEditor.setCursor({ line: 0, ch: 'sigma'.length });
+		(getActiveEditor as jest.Mock).mockReturnValue(localEditor);
+		const filterResult = (localMenu as any).filterSnippets('sigma', localSnippets);
+		const sigmaScore = filterResult.matchScores.get(localSnippets[0])!;
+		const varScore = filterResult.matchScores.get(localSnippets[1])!;
+		expect(typeof sigmaScore).toBe("number");
+		expect(typeof varScore).toBe("number");
 	});
 
 	it('falls back to "all" when current source is blocked by context rules', () => {

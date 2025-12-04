@@ -92,6 +92,14 @@ export interface LocaleStrings {
 		rankingAlgorithmNames: Record<RankingAlgorithmId, string>;
 		rankingAlgorithmEnabledDesc: string;
 		rankingAlgorithmDisabledDesc: string;
+		matchQualityHeading: string;
+		matchQualityDesc: string;
+		matchQualityExactName: string;
+		matchQualityExactDesc: string;
+		matchQualityPrefixName: string;
+		matchQualityPrefixDesc: string;
+		matchQualityDescriptionName: string;
+		matchQualityDescriptionDesc: string;
 		virtualSection: string;
 		showHintsName: string;
 		showHintsDesc: string;
@@ -220,6 +228,18 @@ const translations: Record<LocaleKey, LocaleStrings> = {
 				"Drag to reorder this strategy among other enabled algorithms.",
 			rankingAlgorithmDisabledDesc:
 				"Disabled strategies are fixed at the bottom until re-enabled.",
+			matchQualityHeading: "Match quality bias",
+			matchQualityDesc:
+				"Fine-tune the score offsets applied to exact prefix, fuzzy prefix, and description matches. Lower numbers rank higher.",
+			matchQualityExactName: "Exact prefix bias",
+			matchQualityExactDesc:
+				"Applied when the query suffix fully matches a snippet prefix.",
+			matchQualityPrefixName: "Fuzzy prefix bias",
+			matchQualityPrefixDesc:
+				"Applied when the prefix only matches via fuzzy search.",
+			matchQualityDescriptionName: "Description bias",
+			matchQualityDescriptionDesc:
+				"Applied when only the description matches. Use higher values to demote these hits.",
 			virtualSection: "👻 Virtual text",
 				showHintsName: "Show tab stop hints",
 			showHintsDesc: "Display ghost-text previews at the next tab stop.",
@@ -368,6 +388,16 @@ const translations: Record<LocaleKey, LocaleStrings> = {
 				"开启后可拖动以调整优先级。",
 			rankingAlgorithmDisabledDesc:
 				"关闭时会固定在底部无法拖动。",
+			matchQualityHeading: "匹配质量偏置",
+			matchQualityDesc:
+				"调节完全匹配、模糊匹配与描述匹配的得分偏置。数值越小排名越靠前。",
+			matchQualityExactName: "完全前缀偏置",
+			matchQualityExactDesc: "当查询后缀与片段前缀完全一致时应用。",
+			matchQualityPrefixName: "模糊前缀偏置",
+			matchQualityPrefixDesc: "当只能通过模糊匹配命中前缀时应用。",
+			matchQualityDescriptionName: "描述匹配偏置",
+			matchQualityDescriptionDesc:
+				"仅描述字段命中时应用，可通过增大数值来降低优先级。",
 				virtualSection: "👻 Virtual text",
 					showHintsName: "显示占位符提示",
 					showHintsDesc: "在下一个占位符位置显示 Virtual text 提示。",

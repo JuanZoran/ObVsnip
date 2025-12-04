@@ -67,6 +67,7 @@ export class App {
 	vault = {
 		getName: () => 'vault',
 		getFiles: () => [],
+		getFileByPath: () => null,
 		getAbstractFileByPath: () => null,
 	} as any;
 	workspace = {
@@ -121,3 +122,21 @@ export class Plugin {
 	registerEvent() {}
 	register() {}
 }
+
+export const prepareFuzzySearch = (query: string) => {
+	const target = (query ?? '').toLowerCase();
+	return (text: string) => {
+		const source = (text ?? '').toLowerCase();
+		let lastIndex = -1;
+		for (const char of target) {
+			lastIndex = source.indexOf(char, lastIndex + 1);
+			if (lastIndex === -1) {
+				return null;
+			}
+		}
+		return {
+			score: lastIndex,
+			matches: [],
+		};
+	};
+};

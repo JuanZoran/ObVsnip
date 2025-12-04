@@ -1,6 +1,7 @@
 import { App, Menu, Notice, Setting, TFile, Modal } from "obsidian";
 import type TextSnippetsPlugin from "../../main";
 import type { SnippetFileConfig, SnippetContextScope } from "../types";
+import { getVaultFileByPath } from "../utils/vaultUtils";
 
 type SettingsStrings = ReturnType<TextSnippetsPlugin["getStrings"]>["settings"];
 
@@ -51,16 +52,16 @@ export class SnippetFilesSettings {
 
 		files.forEach((path, index) => {
 			const row = new Setting(container).setName(`${index + 1}. ${path}`);
-			row.addButton((btn) =>
-				btn.setButtonText(this.strings.editButton).onClick(async () => {
-					const file = this.app.vault.getAbstractFileByPath(path);
-					if (!(file instanceof TFile)) {
-						new Notice("File not found in vault");
-						return;
-					}
-					await this.app.workspace.getLeaf().openFile(file);
-				})
-			);
+				row.addButton((btn) =>
+					btn.setButtonText(this.strings.editButton).onClick(async () => {
+						const file = getVaultFileByPath(this.app.vault, path);
+						if (!file) {
+							new Notice("File not found in vault");
+							return;
+						}
+						await this.app.workspace.getLeaf().openFile(file);
+					})
+				);
 			row.addButton((btn) =>
 				btn
 					.setButtonText(this.strings.snippetFilesRemoveButton)

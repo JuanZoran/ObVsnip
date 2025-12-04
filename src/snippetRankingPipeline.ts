@@ -3,6 +3,7 @@ import type { ParsedSnippet, RankingAlgorithmSetting } from "./types";
 export interface SnippetRankingContext {
 	query?: string;
 	usage?: Map<string, number>;
+	matchScores?: Map<ParsedSnippet, number>;
 }
 
 type RankedSnippet = {
@@ -22,6 +23,7 @@ export const rankSnippets = (
 
 	const normalizedQuery = (context.query ?? "").trim().toLowerCase();
 	const usageMap = context.usage;
+	const matchScores = context.matchScores;
 
 	const rankedSnippets: RankedSnippet[] = snippets.map((snippet, index) => ({
 		snippet,
@@ -35,7 +37,8 @@ export const rankSnippets = (
 				left,
 				right,
 				normalizedQuery,
-				usageMap
+				usageMap,
+				matchScores
 			);
 			if (comparison !== 0) {
 				return comparison;
@@ -52,11 +55,12 @@ const compareByAlgorithm = (
 	left: RankedSnippet,
 	right: RankedSnippet,
 	query: string,
-	usageMap?: Map<string, number>
+	usageMap?: Map<string, number>,
+	matchScores?: Map<ParsedSnippet, number>
 ): number => {
 	switch (algorithmId) {
 		case "fuzzy-match":
-			return compareFuzzy(left, right, query);
+			return compareFuzzy(left, right, query, matchScores);
 		case "prefix-length":
 			return comparePrefixLength(left, right);
 		case "alphabetical":
@@ -73,8 +77,17 @@ const compareByAlgorithm = (
 const compareFuzzy = (
 	left: RankedSnippet,
 	right: RankedSnippet,
-	query: string
+	query: string,
+	matchScores?: Map<ParsedSnippet, number>
 ): number => {
+	if (matchScores && matchScores.size > 0) {
+		const leftScore = matchScores.get(left.snippet);
+		const rightScore = matchScores.get(right.snippet);
+		if (leftScore !== undefined || rightScore !== undefined) {
+			return (leftScore ?? Number.POSITIVE_INFINITY) - (rightScore ?? Number.POSITIVE_INFINITY);
+		}
+	}
+
 	const leftScore = getFuzzyScore(left.snippet.prefix, query);
 	const rightScore = getFuzzyScore(right.snippet.prefix, query);
 	return leftScore - rightScore;

@@ -100,6 +100,12 @@ export interface SnippetWidgetConfig {
 	choiceInactiveColor?: string;
 }
 
+export interface MatchQualityBias {
+	exactPrefix: number;
+	prefix: number;
+	description: number;
+}
+
 export interface PluginSettings {
 	snippetFiles: string[];
 	showVirtualText: boolean;
@@ -120,6 +126,7 @@ export interface PluginSettings {
 	referenceSyncMode: 'realtime' | 'on-jump';  // 同步模式
 	lastSnippetSource?: string;
 	snippetFileConfigs: Record<string, SnippetFileConfig>;
+	matchQualityBias: MatchQualityBias;
 }
 
 /**

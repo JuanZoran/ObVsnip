@@ -1,4 +1,10 @@
-import { App, Editor, type EditorPosition } from "obsidian";
+import {
+	App,
+	Editor,
+	type EditorPosition,
+	prepareFuzzySearch,
+	type SearchResult,
+} from "obsidian";
 import { rankSnippets } from "./snippetRankingPipeline";
 
 import type {
@@ -9,6 +15,7 @@ import type {
 	SnippetMenuKeymap,
 	SnippetFileConfig,
 	PluginSettings,
+	MatchQualityBias,
 } from "./types";
 
 import { SnippetManager } from "./snippetManager";
@@ -24,6 +31,7 @@ import { applySnippetStyles } from "./utils/styleUtils";
 import { renderChoiceList } from "./utils/choiceUtils";
 import { getCursorContext } from "./utils/editorContext";
 import { filterSnippetsByContext } from "./utils/snippetContext";
+import { DEFAULT_MATCH_QUALITY_BIAS } from "./config/defaults";
 
 interface SnippetMenuOptions {
 	getSnippets: () => ParsedSnippet[];
@@ -44,16 +52,18 @@ interface SnippetMenuOptions {
 	getSettings?: () => PluginSettings;
 }
 
-const matchesFuzzy = (source: string, query: string): boolean => {
-	if (!query) return false;
-	let position = 0;
-	for (const char of query) {
-		position = source.indexOf(char, position);
-		if (position < 0) return false;
-		position += 1;
-	}
-	return true;
-};
+type MatchQuality = "exactPrefix" | "prefix" | "description";
+
+interface SnippetMatchField {
+	candidate: string;
+	field: "prefix" | "description";
+	quality: MatchQuality;
+	score?: number;
+}
+
+interface CandidateMatchRecord extends SnippetMatchField {
+	length: number;
+}
 
 export const formatSnippetPreview = (snippet: ParsedSnippet): DocumentFragment => {
 	const fragment = document.createDocumentFragment();
@@ -150,7 +160,7 @@ export class SnippetCompletionMenu {
 	private boundPointerMove: () => void;
 
 	private queryAnchorPos: EditorPosition | null = null;
-	private snippetMatchFields: Map<ParsedSnippet, string> = new Map();
+	private snippetMatchFields: Map<ParsedSnippet, SnippetMatchField> = new Map();
 	private sourceLabelEl: HTMLElement | null = null;
 
 	constructor(private app: App, private options: SnippetMenuOptions) {
@@ -327,17 +337,49 @@ export class SnippetCompletionMenu {
 	}
 
 	/**
-	 * Check if a snippet matches a query candidate
+	 * Check if a snippet matches a query candidate using Obsidian's fuzzy matcher.
 	 */
-	private matchSnippet(snippet: ParsedSnippet, candidate: string): boolean {
+	private matchSnippet(
+		snippet: ParsedSnippet,
+		candidate: string,
+		fuzzyMatcher: (text: string) => SearchResult | null,
+		bias: MatchQualityBias
+	): SnippetMatchField | null {
+		const normalizedCandidate = candidate.toLowerCase();
 		const prefixLower = snippet.prefix.toLowerCase();
-		const descLower = snippet.description?.toLowerCase();
 
-		return (
-			prefixLower.startsWith(candidate) ||
-			matchesFuzzy(prefixLower, candidate) ||
-			(descLower?.includes(candidate) ?? false)
-		);
+		if (prefixLower.startsWith(normalizedCandidate)) {
+			return {
+				candidate,
+				field: "prefix",
+				quality: "exactPrefix",
+				score: this.getAdjustedScore(0, candidate.length, "exactPrefix", bias),
+			};
+		}
+
+		const prefixResult = fuzzyMatcher(snippet.prefix);
+		if (prefixResult) {
+			return {
+				candidate,
+				field: "prefix",
+				quality: "prefix",
+				score: this.getAdjustedScore(prefixResult.score, candidate.length, "prefix", bias),
+			};
+		}
+
+		if (snippet.description) {
+			const descResult = fuzzyMatcher(snippet.description);
+			if (descResult) {
+				return {
+					candidate,
+					field: "description",
+					quality: "description",
+					score: this.getAdjustedScore(descResult.score, candidate.length, "description", bias),
+				};
+			}
+		}
+
+		return null;
 	}
 
 	private filterSnippets(
@@ -345,7 +387,8 @@ export class SnippetCompletionMenu {
 		candidates?: ParsedSnippet[]
 	): {
 		snippets: ParsedSnippet[];
-		matchFields: Map<ParsedSnippet, string>;
+		matchFields: Map<ParsedSnippet, SnippetMatchField>;
+		matchScores: Map<ParsedSnippet, number>;
 		bestCandidate: string | undefined;
 	} {
 		const normalized = query.trim().toLowerCase();
@@ -355,27 +398,40 @@ export class SnippetCompletionMenu {
 			return {
 				snippets,
 				matchFields: new Map(),
+				matchScores: new Map(),
 				bestCandidate: undefined,
 			};
 		}
 
 		const suffixes = this.buildSuffixCandidates(normalized);
-		const matchInfo = new Map<ParsedSnippet, { length: number; value: string }>();
+		const matchInfo = new Map<ParsedSnippet, CandidateMatchRecord>();
+		const matchScores = new Map<ParsedSnippet, number>();
 		let hasAnyMatchOverall = false;
+		const biasConfig = this.getMatchQualityBias();
 
 		// Try each suffix candidate from longest to shortest
 		for (const candidate of suffixes) {
 			let matchedAny = false;
+			const fuzzyMatcher = prepareFuzzySearch(candidate);
 
 			for (const snippet of snippets) {
-				if (!this.matchSnippet(snippet, candidate)) continue;
+				const match = this.matchSnippet(snippet, candidate, fuzzyMatcher, biasConfig);
+				if (!match) continue;
 
 				matchedAny = true;
 				hasAnyMatchOverall = true;
 				const previous = matchInfo.get(snippet);
-				// Keep the longest matching candidate
-				if (!previous || candidate.length > previous.length) {
-					matchInfo.set(snippet, { length: candidate.length, value: candidate });
+				const record: CandidateMatchRecord = {
+					...match,
+					length: candidate.length,
+				};
+				if (!previous || this.isBetterMatch(record, previous)) {
+					matchInfo.set(snippet, record);
+					if (typeof match.score === "number") {
+						matchScores.set(snippet, match.score);
+					} else {
+						matchScores.delete(snippet);
+					}
 				}
 			}
 
@@ -387,18 +443,31 @@ export class SnippetCompletionMenu {
 
 		// Build results
 		const acceptedSnippets = Array.from(matchInfo.keys());
-		const matchFields = new Map<ParsedSnippet, string>();
-		for (const [snippet, info] of matchInfo.entries()) {
-			matchFields.set(snippet, info.value);
-		}
+		const matchFields = new Map<ParsedSnippet, SnippetMatchField>(
+			Array.from(matchInfo.entries()).map(([snippet, info]) => [
+				snippet,
+				{
+					candidate: info.candidate,
+					field: info.field,
+					quality: info.quality,
+				},
+			])
+		);
 
-		// Find the best candidate (longest match)
-		const bestCandidate = Array.from(matchInfo.values())
-			.sort((a, b) => b.length - a.length)[0]?.value;
+		// Find the best candidate (prefer best score, then longest candidate)
+		const bestMatch = Array.from(matchInfo.values()).reduce<CandidateMatchRecord | null>(
+			(best, current) => {
+				if (!best) return current;
+				return this.isBetterMatch(current, best) ? current : best;
+			},
+			null
+		);
+		const bestCandidate = bestMatch?.candidate;
 
 		return {
 			snippets: acceptedSnippets,
 			matchFields,
+			matchScores,
 			bestCandidate,
 		};
 	}
@@ -411,6 +480,46 @@ export class SnippetCompletionMenu {
 			candidates.push(candidate);
 		}
 		return candidates;
+	}
+
+	private isBetterMatch(
+		next: CandidateMatchRecord,
+		current: CandidateMatchRecord
+	): boolean {
+		const nextScore = typeof next.score === "number" ? next.score : Number.POSITIVE_INFINITY;
+		const currentScore =
+			typeof current.score === "number" ? current.score : Number.POSITIVE_INFINITY;
+		if (nextScore !== currentScore) {
+			return nextScore < currentScore;
+		}
+
+		if (next.length !== current.length) {
+			return next.length > current.length;
+		}
+
+		// Prefer prefix matches when all else is equal.
+		if (next.field !== current.field) {
+			return next.field === "prefix";
+		}
+
+		return false;
+	}
+
+	private getAdjustedScore(
+		baseScore: number,
+		candidateLength: number,
+		quality: MatchQuality,
+		bias: MatchQualityBias
+	): number {
+		const lengthBias = candidateLength * 10;
+		const qualityBias = bias[quality] ?? DEFAULT_MATCH_QUALITY_BIAS[quality];
+		return baseScore - lengthBias + qualityBias;
+	}
+
+	private getMatchQualityBias(): MatchQualityBias {
+		return (
+			this.options.getSettings?.()?.matchQualityBias ?? DEFAULT_MATCH_QUALITY_BIAS
+		);
 	}
 
 	private render(coords: { top: number; left: number }): void {
@@ -511,9 +620,13 @@ export class SnippetCompletionMenu {
 
 		if (this.previewMatchEl) {
 			const matchField = this.getMatchField(snippet);
-			this.previewMatchEl.textContent = matchField
-				? `当前匹配字段: ${matchField}`
-				: "";
+			if (matchField) {
+				const fieldLabel =
+					matchField.field === "prefix" ? "前缀" : "描述";
+				this.previewMatchEl.textContent = `当前匹配字段 (${fieldLabel}): ${matchField.candidate}`;
+			} else {
+				this.previewMatchEl.textContent = "";
+			}
 			this.previewMatchEl.toggleClass("is-hidden", !matchField);
 		}
 	}
@@ -869,8 +982,8 @@ export class SnippetCompletionMenu {
 		cursor: EditorPosition
 	): { from: EditorPosition; to: EditorPosition } | null {
 		const matchField = this.getMatchField(snippet);
-		if (matchField && matchField.length > 0) {
-			const fromCh = Math.max(0, cursor.ch - matchField.length);
+		if (matchField && matchField.candidate.length > 0) {
+			const fromCh = Math.max(0, cursor.ch - matchField.candidate.length);
 			return {
 				from: { line: cursor.line, ch: fromCh },
 				to: cursor,
@@ -932,7 +1045,7 @@ export class SnippetCompletionMenu {
 		};
 	}
 
-	private getMatchField(snippet: ParsedSnippet): string | undefined {
+	private getMatchField(snippet: ParsedSnippet): SnippetMatchField | undefined {
 		return this.snippetMatchFields.get(snippet);
 	}
 
@@ -1041,7 +1154,8 @@ export class SnippetCompletionMenu {
 		const filterResult = this.performFiltering(query, visibleSnippets);
 		const algorithms = this.options.getRankingAlgorithms();
 		const rankingContext = this.buildRankingContext(
-			filterResult.bestCandidate ?? query ?? ""
+			filterResult.bestCandidate ?? query ?? "",
+			filterResult.matchScores
 		);
 
 		if (filterResult.filtered.length > 0) {
@@ -1070,7 +1184,8 @@ export class SnippetCompletionMenu {
 		visibleSnippets: ParsedSnippet[]
 	): {
 		filtered: ParsedSnippet[];
-		matchFields: Map<ParsedSnippet, string>;
+		matchFields: Map<ParsedSnippet, SnippetMatchField>;
+		matchScores: Map<ParsedSnippet, number>;
 		bestCandidate: string | undefined;
 		searchDuration: number;
 	} {
@@ -1083,6 +1198,7 @@ export class SnippetCompletionMenu {
 		return {
 			filtered: filterResult.snippets,
 			matchFields: filterResult.matchFields,
+			matchScores: filterResult.matchScores,
 			bestCandidate: filterResult.bestCandidate,
 			searchDuration,
 		};
@@ -1187,10 +1303,14 @@ export class SnippetCompletionMenu {
 		this.options.logger.debug("menu", message);
 	}
 
-	private buildRankingContext(query: string) {
+	private buildRankingContext(
+		query: string,
+		matchScores?: Map<ParsedSnippet, number>
+	) {
 		return {
 			query,
 			usage: this.options.getUsageCounts?.(),
+			matchScores,
 		};
 	}
 

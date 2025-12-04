@@ -4,6 +4,7 @@ import type {
 	VirtualTextColorPreset,
 	SnippetFileConfig,
 	SnippetContextCondition,
+	MatchQualityBias,
 } from "../types";
 import { DEFAULT_RANKING_ALGORITHMS } from "../rankingConfig";
 
@@ -13,6 +14,12 @@ export const DEFAULT_COLOR_SCHEME: VirtualTextColorPreset = {
 	ghostTextColor: "var(--text-muted)",
 	choiceActiveColor: "#5690ff",
 	choiceInactiveColor: "#4dabff",
+};
+
+export const DEFAULT_MATCH_QUALITY_BIAS: MatchQualityBias = {
+	exactPrefix: -2000,
+	prefix: -200,
+	description: 2000,
 };
 
 export const BUILTIN_COLOR_SCHEMES: VirtualTextColorPreset[] = [
@@ -95,6 +102,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	referenceSnippetEnabled: true,
 	referenceSyncMode: 'realtime',
 	lastSnippetSource: "all",
+	matchQualityBias: { ...DEFAULT_MATCH_QUALITY_BIAS },
 };
 
 const DEFAULT_CONTEXTS: SnippetContextCondition[] = [{ scope: "anywhere" }];
@@ -158,6 +166,12 @@ export const ensurePluginSettings = (
 	);
 	combined.snippetFiles = normalizedSnippetFiles.files;
 	combined.snippetFileConfigs = normalizedSnippetFiles.configs;
+	combined.matchQualityBias = {
+		...DEFAULT_MATCH_QUALITY_BIAS,
+		...(combined.matchQualityBias ?? {}),
+		...(raw?.matchQualityBias ?? {}),
+	};
+
 	combined.rankingAlgorithms = raw?.rankingAlgorithms
 		? [...raw.rankingAlgorithms]
 		: [...DEFAULT_SETTINGS.rankingAlgorithms];

@@ -8,6 +8,7 @@ jest.mock('obsidian', () => {
 });
 
 const createVault = () => ({
+	getFileByPath: jest.fn(),
 	getAbstractFileByPath: jest.fn(),
 	read: jest.fn(),
 	getFiles: jest.fn().mockReturnValue([]),
@@ -36,23 +37,15 @@ describe('SnippetLoader error handling', () => {
 
 	it('returns empty array when file missing', async () => {
 		const app = createApp();
-		app.vault.getAbstractFileByPath.mockReturnValue(null);
+		app.vault.getFileByPath.mockReturnValue(null);
 		const loader = new SnippetLoader(app, new PluginLogger());
 		const result = await loader.loadFromFile('missing.json');
 		expect(result).toEqual([]);
 	});
 
-	it('returns empty array when path is not a file', async () => {
-		const app = createApp();
-		app.vault.getAbstractFileByPath.mockReturnValue({});
-		const loader = new SnippetLoader(app, new PluginLogger());
-		const result = await loader.loadFromFile('folder');
-		expect(result).toEqual([]);
-	});
-
 	it('handles vault.read errors gracefully', async () => {
 		const app = createApp();
-		app.vault.getAbstractFileByPath.mockReturnValue({ stat: {} });
+		app.vault.getFileByPath.mockReturnValue(createTFile('file.json'));
 		app.vault.read.mockRejectedValue(new Error('read error'));
 		const loader = new SnippetLoader(app, new PluginLogger());
 		const result = await loader.loadFromFile('file.json');
@@ -72,7 +65,7 @@ describe('SnippetLoader success paths', () => {
 	it('loads snippets successfully from valid JSON file (object format)', async () => {
 		const app = createApp();
 		const file = createTFile('snippets.json');
-		app.vault.getAbstractFileByPath.mockReturnValue(file);
+		app.vault.getFileByPath.mockReturnValue(file);
 		app.vault.read.mockResolvedValue(JSON.stringify({
 			'Test Snippet': {
 				prefix: 'test',
@@ -95,7 +88,7 @@ describe('SnippetLoader success paths', () => {
 	it('loads snippets successfully from valid JSON file (array format)', async () => {
 		const app = createApp();
 		const file = createTFile('snippets.json');
-		app.vault.getAbstractFileByPath.mockReturnValue(file);
+		app.vault.getFileByPath.mockReturnValue(file);
 		app.vault.read.mockResolvedValue(JSON.stringify([
 			{
 				prefix: 'test1',
@@ -120,7 +113,7 @@ describe('SnippetLoader success paths', () => {
 	it('handles empty JSON file', async () => {
 		const app = createApp();
 		const file = createTFile('empty.json');
-		app.vault.getAbstractFileByPath.mockReturnValue(file);
+		app.vault.getFileByPath.mockReturnValue(file);
 		app.vault.read.mockResolvedValue('{}');
 
 		const loader = new SnippetLoader(app, new PluginLogger());
@@ -132,7 +125,7 @@ describe('SnippetLoader success paths', () => {
 	it('handles JSON file with invalid snippets', async () => {
 		const app = createApp();
 		const file = createTFile('invalid.json');
-		app.vault.getAbstractFileByPath.mockReturnValue(file);
+		app.vault.getFileByPath.mockReturnValue(file);
 		app.vault.read.mockResolvedValue(JSON.stringify({
 			'Valid Snippet': {
 				prefix: 'valid',
@@ -154,13 +147,27 @@ describe('SnippetLoader success paths', () => {
 	it('handles JSON parse errors gracefully', async () => {
 		const app = createApp();
 		const file = createTFile('malformed.json');
-		app.vault.getAbstractFileByPath.mockReturnValue(file);
+		app.vault.getFileByPath.mockReturnValue(file);
 		app.vault.read.mockResolvedValue('{ invalid json }');
 
 		const loader = new SnippetLoader(app, new PluginLogger());
 		const result = await loader.loadFromFile('malformed.json');
 
 		expect(result).toEqual([]);
+	});
+
+	it('falls back to legacy API when getFileByPath is unavailable', async () => {
+		const app = createApp();
+		const file = createTFile('legacy.json');
+		(app.vault as any).getFileByPath = undefined;
+		app.vault.getAbstractFileByPath.mockReturnValue(file);
+		app.vault.read.mockResolvedValue('{}');
+
+		const loader = new SnippetLoader(app, new PluginLogger());
+		const result = await loader.loadFromFile('legacy.json');
+
+		expect(result).toEqual([]);
+		expect(app.vault.getAbstractFileByPath).toHaveBeenCalledWith('legacy.json');
 	});
 });
 
